@@ -187,14 +187,16 @@ main{max-width:1080px; margin:0 auto; padding:22px max(16px,env(safe-area-inset-
 .foot{max-width:1080px;margin:0 auto;padding:0 20px 40px;color:var(--muted);font-size:12px;line-height:1.7}
 .foot code{background:var(--surface-3);padding:1px 6px;border-radius:5px;font-size:11.5px}
 
-/* ── Print / 인쇄 레이아웃 (A4, 한 페이지에 사진 2개) ── */
+/* ── Print / 인쇄 레이아웃 (A4, 한 페이지에 사진 2개) ──
+   @page 여백을 0으로 두면 크롬·엣지가 머리글/바닥글(날짜·제목·주소)을 넣을
+   자리가 없어 자동으로 사라진다. 실제 여백은 .psheet 안쪽 패딩으로 준다. */
 #printArea{display:none}
 @media print{
-  @page{size:A4 portrait; margin:12mm}
-  body{background:#fff}
+  @page{size:A4 portrait; margin:0}
+  html,body{background:#fff; margin:0}
   .app{display:none !important}
   #printArea{display:block}
-  .psheet{page-break-after:always; height:273mm; display:flex; flex-direction:column}
+  .psheet{page-break-after:always; box-sizing:border-box; width:210mm; height:296mm; padding:12mm; display:flex; flex-direction:column; overflow:hidden}
   .psheet:last-child{page-break-after:auto}
   .phead{border-bottom:2px solid #000; padding-bottom:3mm; margin-bottom:4mm; flex:0 0 auto}
   .phead .t{font-size:16pt; font-weight:900; text-align:center; letter-spacing:-.01em}
@@ -525,7 +527,13 @@ $("#make").addEventListener("click",async ()=>{
   }
 });
 $("#preview").addEventListener("click",doPrint);
-window.addEventListener("beforeprint",()=>{if($("#printArea").children.length===0) buildPrintDOM();});
+/* 인쇄 직전에 DOM을 준비하고, 머리글에 뜨는 제목을 잠시 비운다(브라우저가 머리글을 켠 경우 대비). */
+let savedTitle=document.title;
+window.addEventListener("beforeprint",()=>{
+  if($("#printArea").children.length===0) buildPrintDOM();
+  savedTitle=document.title; document.title=" ";
+});
+window.addEventListener("afterprint",()=>{ document.title=savedTitle; });
 
 buildStages();
 </script>
