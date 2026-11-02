@@ -164,7 +164,7 @@ main{max-width:1080px; margin:0 auto; padding:22px max(16px,env(safe-area-inset-
 .export{background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); padding:18px 20px}
 .export h3{margin:0 0 4px; font-size:15px}
 .export .hint{margin:0 0 15px; font-size:12.5px; color:var(--muted)}
-.fmt{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:16px}
+.fmt{display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-bottom:16px}
 @media (max-width:620px){.fmt{grid-template-columns:1fr}}
 .fmt label{position:relative; border:1.5px solid var(--border); border-radius:11px; padding:13px 14px; cursor:pointer; display:flex; gap:11px; align-items:flex-start; background:var(--surface-2); transition:border-color .12s, background .12s}
 .fmt label:hover{border-color:var(--border-strong)}
@@ -237,11 +237,9 @@ main{max-width:1080px; margin:0 auto; padding:22px max(16px,env(safe-area-inset-
       <p class="hint">형식을 고르고 버튼을 누르면 사진·설명·공사명이 담긴 문서가 저장됩니다. 인쇄하면 한 페이지에 사진 2개가 칸 크기에 맞춰 들어갑니다.</p>
       <div class="fmt">
         <label><input type="radio" name="fmt" value="xlsx" checked>
-          <span class="fi x">XLS</span><span><b>엑셀 (.xlsx)</b><span class="d">전·중·후 시트 자동 분리, 사진 삽입</span></span></label>
-        <label><input type="radio" name="fmt" value="doc">
-          <span class="fi h">한글</span><span><b>한글·워드 (.doc)</b><span class="d">한글(HWP)·MS워드에서 열림</span></span></label>
+          <span class="fi x">XLS</span><span><b>엑셀 (.xlsx)</b><span class="d">전·중·후 시트 자동 분리, 사진을 셀에 꽉 채움</span></span></label>
         <label><input type="radio" name="fmt" value="print">
-          <span class="fi p">PDF</span><span><b>인쇄 / PDF</b><span class="d">바로 인쇄하거나 PDF로 저장</span></span></label>
+          <span class="fi p">PDF</span><span><b>인쇄 / PDF</b><span class="d">한 페이지 2장, 바로 인쇄하거나 PDF로 저장</span></span></label>
       </div>
       <div class="go">
         <button class="btn" id="make">문서 생성</button>
@@ -254,7 +252,7 @@ main{max-width:1080px; margin:0 auto; padding:22px max(16px,env(safe-area-inset-
   <div class="foot">
     팁 · 각 칸에 사진을 여러 장 한 번에 끌어다 놓을 수 있습니다. 사진 아래 칸에 설명을 적으면 문서에 그대로 들어갑니다.
     <code>↑</code><code>↓</code> 로 순서를 바꾸고 <code>전/중/후</code> 로 단계를 옮길 수 있습니다.<br>
-    한글 파일이 필요하면 <b>한글·워드(.doc)</b> 로 만든 뒤 한글에서 열거나, <b>인쇄/PDF</b> 로 만든 PDF를 한글에 넣으면 됩니다.
+    엑셀은 사진이 있는 단계만 <b>시트로 자동 분리</b>되고, 각 사진은 셀 크기에 꽉 맞게 들어갑니다. 휴대폰 사진의 회전 방향도 자동으로 바로잡습니다.
   </div>
 </div>
 
@@ -316,25 +314,49 @@ function buildStages(){
   renderAll();
 }
 
-/* ── add image files ── */
+/* ── add image files ──
+   휴대폰 사진은 EXIF 회전정보 때문에 엑셀에서 거꾸로/옆으로 나올 수 있어,
+   캔버스에 "보이는 방향 그대로" 다시 그려 회전을 확정(bake)하고 EXIF를 제거한다.
+   동시에 긴 변을 1600px로 축소해 파일 용량도 줄인다. */
+const MAX_SIDE=1600;
+function normalizeImage(file){
+  return new Promise((resolve,reject)=>{
+    const finish=(bitmap)=>{
+      const sw=bitmap.width, sh=bitmap.height;
+      const scale=Math.min(1, MAX_SIDE/Math.max(sw,sh));
+      const w=Math.max(1,Math.round(sw*scale)), h=Math.max(1,Math.round(sh*scale));
+      const cv=document.createElement("canvas"); cv.width=w; cv.height=h;
+      const ctx=cv.getContext("2d");
+      ctx.fillStyle="#fff"; ctx.fillRect(0,0,w,h);
+      ctx.drawImage(bitmap,0,0,w,h);
+      if(bitmap.close) try{bitmap.close();}catch(e){}
+      resolve({dataURL:cv.toDataURL("image/jpeg",0.9), w, h});
+    };
+    // 1순위: createImageBitmap(from-image) — EXIF 방향을 픽셀에 반영
+    if(window.createImageBitmap){
+      createImageBitmap(file,{imageOrientation:"from-image"})
+        .then(finish)
+        .catch(()=>fallback());
+    } else { fallback(); }
+    function fallback(){
+      // 2순위: <img> 로 로드 (대부분의 최신 브라우저는 EXIF 방향을 적용해 표시)
+      const fr=new FileReader();
+      fr.onload=()=>{ const im=new Image(); im.onload=()=>finish(im); im.onerror=reject; im.src=fr.result; };
+      fr.onerror=reject; fr.readAsDataURL(file);
+    }
+  });
+}
 function addFiles(files, stage){
   const imgs=[...files].filter(f=>f.type.startsWith("image/"));
   if(!imgs.length){toast("이미지 파일만 넣을 수 있어요"); return;}
-  let pending=imgs.length;
+  let pending=imgs.length, ok=0;
   imgs.forEach(file=>{
-    const fr=new FileReader();
-    fr.onload=()=>{
-      const im=new Image();
-      im.onload=()=>{
-        data[stage].push({id:uid++, dataURL:fr.result, name:file.name, desc:"", w:im.naturalWidth, h:im.naturalHeight});
-        if(--pending===0){renderAll(); toast(imgs.length+"장 추가됨");}
-        else renderAll();
-      };
-      im.onerror=()=>{ if(--pending===0) renderAll(); };
-      im.src=fr.result;
-    };
-    fr.onerror=()=>{ if(--pending===0) renderAll(); };
-    fr.readAsDataURL(file);
+    normalizeImage(file).then(n=>{
+      data[stage].push({id:uid++, dataURL:n.dataURL, name:file.name, desc:"", w:n.w, h:n.h});
+      ok++;
+    }).catch(()=>{}).finally(()=>{
+      if(--pending===0){renderAll(); toast(ok+"장 추가됨");} else renderAll();
+    });
   });
 }
 
@@ -425,45 +447,17 @@ function download(blob, filename){
 function fileStamp(){const d=new Date(),z=n=>String(n).padStart(2,"0");return `${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}`;}
 function safeName(){return (projectName()||"공사사진대지").replace(/[\\/:*?"<>|]/g,"_");}
 
-/* ── .doc (한글/워드) export ── */
-function exportDoc(){
-  const name=projectName()||"공사 사진대지";
-  const items=ordered();
-  let body="";
-  for(let i=0;i<items.length;i+=2){
-    const pair=items.slice(i,i+2);
-    const blocks=pair.map(p=>`
-      <table cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;margin:0 0 6mm 0">
-        <tr><td style="border:1px solid #000;height:112mm;text-align:center;vertical-align:middle">
-          <img src="${p.dataURL}" style="max-width:170mm;max-height:108mm"/>
-        </td></tr>
-        <tr><td style="border:1px solid #000;border-top:0;padding:3mm 4mm;font-size:11pt;height:16mm;vertical-align:top">
-          <b>[${p.stageKo}]</b>&nbsp;${escapeHtml(p.desc).replace(/\n/g,"<br>")}
-        </td></tr>
-      </table>`).join("");
-    const brk=(i+2<items.length)?"page-break-after:always;":"";
-    body+=`<div style="${brk}">
-      <div style="border-bottom:2px solid #000;padding-bottom:2mm;margin-bottom:4mm">
-        <div style="font-size:16pt;font-weight:bold;text-align:center">${escapeHtml(name)}</div>
-      </div>${blocks}</div>`;
-  }
-  const html=`<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
-<head><meta charset="utf-8">
-<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]-->
-<style>@page{size:A4 portrait;margin:12mm} body{font-family:"맑은 고딕","Malgun Gothic",sans-serif}</style>
-</head><body>${body}</body></html>`;
-  const blob=new Blob(["﻿"+html],{type:"application/msword;charset=utf-8"});
-  download(blob, `${safeName()}_${fileStamp()}.doc`);
-  toast("한글·워드 문서가 저장되었습니다");
-}
-
-/* ── Excel export (전/중/후 시트 분리, 사진 삽입) ── */
+/* ── Excel export (전/중/후 시트 분리, 사진을 셀에 꽉 맞게 삽입) ──
+   사진 셀을 "그 사진의 비율"로 만들고, 사진을 셀의 네 모서리에 맞춰(two-cell anchor)
+   꽉 채운다 → 여백 없음 + 비율 왜곡 없음. 셀 크기를 바꾸면 사진도 함께 맞춰진다. */
+const COL_W=86;              // 사진 열 너비(글자 단위)
+const COL_PX=Math.round(COL_W*7)+5;   // 대략적인 열 픽셀폭 (≈607px)
+const ROW_MAX_PX=540;        // 한 행 최대 높이(px) — 엑셀 행 높이 한계(약 545px) 고려
 async function exportExcel(){
   if(typeof ExcelJS==="undefined"){toast("엑셀 모듈을 불러오지 못했습니다");return;}
   const name=projectName()||"공사 사진대지";
   const wb=new ExcelJS.Workbook();
   wb.creator="공사 사진대지 생성기";
-  const BOX_W=620, BOX_H=300; // 사진 칸 크기(px)
   let made=0;
   STAGES.forEach(st=>{
     const arr=data[st.key]; if(!arr.length) return;
@@ -473,41 +467,44 @@ async function exportExcel(){
         margins:{left:0.4,right:0.4,top:0.5,bottom:0.5,header:0.2,footer:0.2}, printTitlesRow:"1:1"},
       views:[{showGridLines:false}]
     });
-    ws.getColumn(1).width=2;
-    ws.getColumn(2).width=88;
-    // 공사명 (맨 위, 모든 페이지 반복)
-    ws.mergeCells("A1:B1");
+    ws.getColumn(1).width=COL_W;
+    ws.getColumn(2).width=2;   // 오른쪽 경계용 얇은 열
+    // 공사명 (맨 위, 모든 페이지 상단에 반복)
     const titleCell=ws.getCell("A1");
     titleCell.value=`${name}  ―  ${st.ko}`;
     titleCell.font={bold:true,size:15};
     titleCell.alignment={horizontal:"center",vertical:"middle"};
+    titleCell.border={bottom:{style:"medium"}};
     ws.getRow(1).height=30;
-    let r=3;
-    arr.forEach((p,i)=>{
-      // 사진 행
-      const imgRow=r;
-      ws.getRow(imgRow).height=BOX_H*0.75; // px→pt
-      // 종횡비에 맞춰 칸 안에 들어가게 축소
-      const scale=Math.min(BOX_W/p.w, BOX_H/p.h, 1.5);
-      const dw=Math.round(p.w*scale), dh=Math.round(p.h*scale);
-      const ext=(p.dataURL.match(/^data:image\/(\w+)/)||[,"png"])[1];
-      const imgId=wb.addImage({base64:p.dataURL, extension:(ext==="jpg"?"jpeg":ext)});
-      const colFrac=Math.max(0,(BOX_W-dw)/2)/((ws.getColumn(2).width)*7.0); // 가로 가운데
-      ws.addImage(imgId,{tl:{col:1+colFrac,row:imgRow-1+0.03}, ext:{width:dw,height:dh}, editAs:"oneCell"});
+    let rowNum=3;              // 1-based 현재 행
+    arr.forEach(p=>{
+      const aspect=p.h/p.w;                    // 세로/가로 비율
+      let cellPx=Math.round(COL_PX*aspect);    // 꽉 채웠을 때 필요한 셀 높이(px)
+      const imgRow=rowNum;
+      let imgId=wb.addImage({base64:p.dataURL, extension:"jpeg"});
+      if(cellPx<=ROW_MAX_PX){
+        // 세로가 한 행에 들어감 → 셀 네 모서리에 꽉 맞춤(여백/왜곡 없음)
+        ws.getRow(imgRow).height=cellPx*0.75;  // px→pt
+        ws.addImage(imgId,{tl:{col:0,row:imgRow-1}, br:{col:1,row:imgRow}});
+      } else {
+        // 아주 세로로 긴 사진 → 높이를 제한하고 가로 가운데 정렬(좌우 약간 여백)
+        const dh=ROW_MAX_PX, dw=Math.round(dh/aspect);
+        ws.getRow(imgRow).height=dh*0.75;
+        const colFrac=Math.max(0,(COL_PX-dw)/2)/COL_PX;
+        ws.addImage(imgId,{tl:{col:colFrac,row:imgRow-1}, ext:{width:dw,height:dh}, editAs:"oneCell"});
+      }
+      ws.getCell(`A${imgRow}`).border={top:{style:"thin"},bottom:{style:"thin"},left:{style:"thin"},right:{style:"thin"}};
       // 설명 행
       const capRow=imgRow+1;
-      ws.mergeCells(`A${capRow}:B${capRow}`);
       const cap=ws.getCell(`A${capRow}`);
       cap.value={richText:[{text:`[${st.ko}] `,font:{bold:true}},{text:p.desc||""}]};
-      cap.alignment={vertical:"top",horizontal:"left",wrapText:true};
+      cap.alignment={vertical:"middle",horizontal:"left",wrapText:true};
       cap.font={size:11};
       cap.border={top:{style:"thin"},left:{style:"thin"},right:{style:"thin"},bottom:{style:"thin"}};
-      ws.getRow(capRow).height=46;
-      // 사진 칸 테두리
-      ["A","B"].forEach(c=>{ws.getCell(`${c}${imgRow}`).border={top:{style:"thin"},bottom:{style:"thin"},left:{style:"thin"},right:{style:"thin"}};});
-      // 간격 행
-      ws.getRow(capRow+1).height=10;
-      r=capRow+2;
+      ws.getRow(capRow).height=42;
+      // 사진 사이 간격 행
+      ws.getRow(capRow+1).height=9;
+      rowNum=capRow+2;
     });
   });
   if(!made){toast("사진을 먼저 추가하세요");return;}
@@ -521,7 +518,6 @@ $("#make").addEventListener("click",async ()=>{
   if(total()===0){toast("사진을 먼저 추가하세요");return;}
   const fmt=document.querySelector("input[name=fmt]:checked").value;
   if(fmt==="print"){doPrint(); return;}
-  if(fmt==="doc"){exportDoc(); return;}
   if(fmt==="xlsx"){
     const btn=$("#make"); btn.disabled=true; btn.textContent="만드는 중…";
     try{await exportExcel();}catch(e){console.error(e);toast("엑셀 생성 중 오류가 발생했습니다");}
