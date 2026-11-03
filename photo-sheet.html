@@ -548,6 +548,7 @@ main{max-width:1180px; margin:0 auto; padding:20px max(16px,env(safe-area-inset-
 .lay-head b{font-size:14px}
 .lay-head span{font-size:11px;color:var(--muted)}
 .lay-col{display:flex;flex-direction:column;gap:16px;padding:16px}
+.lay-note{font-size:11.5px;color:var(--muted);text-align:center;font-weight:600;background:var(--surface-3);border-radius:8px;padding:6px}
 .lay-item>.lab{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:7px;letter-spacing:.02em}
 .lay-item>.lab .hint{font-weight:500;color:var(--muted);font-size:10.5px}
 .seg{display:flex;gap:4px;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:3px}
@@ -672,8 +673,17 @@ main{max-width:1180px; margin:0 auto; padding:20px max(16px,env(safe-area-inset-
 
     <aside class="side">
       <section class="panel">
-        <div class="lay-head">🧱 <b>레이아웃 블록</b></div>
+        <div class="lay-head">🧱 <b>레이아웃</b></div>
         <div class="lay-col">
+          <div class="lay-item">
+            <div class="lab">빠른 배치 <span class="hint">한 페이지에</span></div>
+            <div class="seg" id="segPreset">
+              <button data-r="1" data-shape="portrait">1장</button>
+              <button data-r="1" data-shape="landscape">2장</button>
+              <button data-r="2" data-shape="portrait">4장</button>
+              <button data-r="2" data-shape="landscape">6장</button>
+            </div>
+          </div>
           <div class="lay-item">
             <div class="lab">한 줄 사진 수</div>
             <div class="seg" id="segRow">
@@ -692,6 +702,7 @@ main{max-width:1180px; margin:0 auto; padding:20px max(16px,env(safe-area-inset-
             <div class="lab">사진 크기 <span class="hint">칸 크기</span></div>
             <div class="rng"><input type="range" id="rngSize" min="30" max="100" step="5" value="100"><span class="val" id="sizeVal">100%</span></div>
           </div>
+          <div class="lay-note" id="ppNote"></div>
         </div>
       </section>
 
@@ -782,11 +793,19 @@ async function renderCell(photo,boxW,boxH){
 }
 
 /* ── layout math ── */
-function aspectWH(photo){ // 칸의 가로/세로 비율(width/height)
-  if(state.shape==="landscape")return 4/3;
-  if(state.shape==="portrait")return 3/4;
-  if(state.shape==="square")return 1;
-  return (photo.w&&photo.h)?photo.w/photo.h:4/3; // 원본
+/* 한 페이지에 "딱 떨어지는" 줄 수를 계산하고, 칸 높이를 페이지에 맞춰 스냅한다.
+   예) 1장/줄·가로 → 2줄(=2장/쪽), 2장/줄·세로 → 2줄(=4장/쪽). */
+function computeLayout(){
+  const CONTENT_W=186, AVAIL_H=251, CAP=9, GAP=4; // mm (A4 여백12 + 공사명14 + 구역헤더8 제외)
+  const n=state.perRow;
+  const cellWfull=(CONTENT_W-(n-1)*GAP)/n;
+  const asp=(state.shape==="portrait")?3/4:4/3;
+  const naturalH=cellWfull/asp;
+  const rows=Math.max(1,Math.round(AVAIL_H/(naturalH+CAP+GAP)));
+  const cellHfull=AVAIL_H/rows-CAP-GAP;
+  const s=state.size/100;
+  return {n, rows, perPage:rows*n, CAP, GAP, CONTENT_W,
+    cellWfull, cellHfull, aspect:cellWfull/cellHfull, cellW:cellWfull*s, cellH:cellHfull*s};
 }
 function total(){return STAGES.reduce((n,s)=>n+state.stages[s.key].length,0);}
 function projectName(){return $("#pname").value.trim();}
@@ -815,8 +834,7 @@ function render(){
     const sec=document.createElement("section");sec.className="stage";sec.dataset.s=st.key;
     const head=document.createElement("div");head.className="stage-head";
     head.innerHTML=`<span class="dot"></span><h2>${st.ko}</h2><span class="count">${arr.length}장</span>`;
-    const add=document.createElement("button");add.className="addbtn";
-    add.textContent=st.key==="before"?"📥 일괄 사진 추가":"+ 사진 추가";
+    const add=document.createElement("button");add.className="addbtn";add.textContent="📥 일괄 사진 추가";
     const fileIn=document.createElement("input");fileIn.type="file";fileIn.accept="image/*";fileIn.multiple=true;fileIn.hidden=true;
     add.onclick=()=>fileIn.click();fileIn.onchange=()=>{addFiles(fileIn.files,st.key);fileIn.value="";};
     head.appendChild(add);head.appendChild(fileIn);sec.appendChild(head);
@@ -854,7 +872,7 @@ function makeDrop(st,label){
 function makeCell(st,p,i,arr){
   const block=document.createElement("div");block.className="cellblock";
   const box=document.createElement("div");box.className="photobox"+(p.fit==="cover"?" cover":"");
-  box.style.setProperty("--ar",aspectWH(p).toFixed(4));
+  box.style.setProperty("--ar",computeLayout().aspect.toFixed(4));
   box.style.setProperty("--fit",p.fit);
   box.style.setProperty("--px",p.posX+"%");box.style.setProperty("--py",p.posY+"%");
   const img=document.createElement("img");img.src=p.dataURL;img.alt="";img.draggable=false;
@@ -904,39 +922,37 @@ function updateStat(){const n=total();$("#make").disabled=n===0;$("#print").disa
   $("#statline").textContent=n?`총 ${n}장`:"사진을 먼저 추가하세요";}
 
 /* ── layout controls ── */
-function wireSeg(id,key,cb){const el=$(id);el.querySelectorAll("button").forEach(b=>b.onclick=()=>{
-  el.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed","false"));
-  b.setAttribute("aria-pressed","true");let v=b.dataset.v;if(key==="perRow")v=+v;state[key]=v;if(cb)cb();render();});}
-wireSeg("#segRow","perRow");wireSeg("#segShape","shape");
+function syncSegs(){
+  $("#segRow").querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",(+b.dataset.v===state.perRow)?"true":"false"));
+  $("#segShape").querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",(b.dataset.v===state.shape)?"true":"false"));
+  $("#segPreset").querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",(+b.dataset.r===state.perRow&&b.dataset.shape===state.shape)?"true":"false"));
+}
+function updatePPNote(){const L=computeLayout();$("#ppNote").textContent="한 페이지에 "+L.perPage+"장 ("+state.perRow+"장/줄 × "+L.rows+"줄)";}
+function onLayoutChange(){syncSegs();updatePPNote();render();}
+$("#segRow").querySelectorAll("button").forEach(b=>b.onclick=()=>{state.perRow=+b.dataset.v;onLayoutChange();});
+$("#segShape").querySelectorAll("button").forEach(b=>b.onclick=()=>{state.shape=b.dataset.v;onLayoutChange();});
+$("#segPreset").querySelectorAll("button").forEach(b=>b.onclick=()=>{state.perRow=+b.dataset.r;state.shape=b.dataset.shape;onLayoutChange();});
 $("#rngSize").addEventListener("input",e=>{state.size=+e.target.value;$("#sizeVal").textContent=state.size+"%";
-  const g=document.querySelector(".cells");if(g)document.querySelectorAll(".cells").forEach(x=>x.style.maxWidth=state.size+"%");});
+  document.querySelectorAll(".cells").forEach(x=>x.style.maxWidth=state.size+"%");});
 
 /* ── page model for PDF / print ── */
 const MM=3.78; // mm→px(96dpi)
 function orderedStages(){return STAGES.map(s=>({ko:s.ko,arr:state.stages[s.key]})).filter(s=>s.arr.length);}
 async function buildPageModel(){
-  // mm 단위 레이아웃 계산
-  const MARGIN=12,HEADER=13,GAP=4,CAP=9;
-  const contentW=210-2*MARGIN, gridW=contentW*state.size/100;
-  const n=state.perRow, cellW=(gridW-(n-1)*GAP)/n;
-  const availH=297-2*MARGIN-HEADER;
+  const L=computeLayout();
   const sections=orderedStages();
-  const pages=[]; let cur=null,curH=0;
-  function np(){cur={rows:[]};pages.push(cur);curH=0;}
+  // 모든 (구역, 한 줄)을 순서대로 펼친다
+  const items=[];
   for(const sec of sections){
-    if(state.pageBreak==="section"||!cur) np();
-    else if(cur.rows.length) curH+=4; // 구역 간 간격
-    // 구역 헤더 줄 공간
-    curH+=7;
-    for(let i=0;i<sec.arr.length;i+=n){
-      const rowPhotos=sec.arr.slice(i,i+n);
-      // 행 높이: 칸 높이 중 최대(원본 모양 대응)
-      const cellH=Math.max(...rowPhotos.map(p=>cellW/aspectWH(p)));
-      const blockH=cellH+CAP+GAP;
-      if(curH+blockH>availH && cur.rows.length){ np(); }
-      cur.rows.push({stageKo:sec.ko, first:(i===0), cellW, cellH, photos:rowPhotos});
-      curH+=blockH;
+    for(let i=0;i<sec.arr.length;i+=L.n){
+      items.push({stageKo:sec.ko, first:i===0, photos:sec.arr.slice(i,i+L.n)});
     }
+  }
+  // 한 페이지에 L.rows 줄씩 이어서 채운다
+  const pages=[]; let cur=null;
+  for(const it of items){
+    if(!cur || cur.rows.length>=L.rows){ cur={rows:[]}; pages.push(cur); }
+    cur.rows.push({stageKo:it.stageKo, first:it.first, cellW:L.cellW, cellH:L.cellH, photos:it.photos});
   }
   // 각 칸 이미지를 미리 렌더(px, 2배 해상도)
   for(const pg of pages) for(const row of pg.rows){
@@ -966,8 +982,8 @@ function pageDOM(pages,name){
           <div style="border-top:1px solid #000;padding:4px 7px;font-size:11px;min-height:7mm;line-height:1.35"><b>[${escapeHtml(c.stageKo)}]</b> ${escapeHtml(c.desc)}</div>
         </div>`;
       });
-      const gridW=(210-24)*state.size/100;
-      html+=`<div style="display:flex;gap:4mm;margin-bottom:4mm;width:${gridW.toFixed(2)}mm;align-items:flex-start">${cells}</div>`;
+      const gw=(state.perRow*row.cellW + (state.perRow-1)*4);
+      html+=`<div style="display:flex;gap:4mm;margin:0 auto 4mm;width:${gw.toFixed(2)}mm;align-self:center;justify-content:center;align-items:flex-start">${cells}</div>`;
     });
     pageEl.innerHTML=html;frag.appendChild(pageEl);
   });
@@ -1093,7 +1109,7 @@ $("#print").addEventListener("click",async()=>{const b=$("#print");b.disabled=tr
 window.addEventListener("afterprint",()=>{document.title=savedTitle;});
 $("#pname").addEventListener("input",()=>{});
 
-render();
+syncSegs();updatePPNote();render();
 </script>
 </body>
 </html>
