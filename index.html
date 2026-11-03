@@ -1089,18 +1089,23 @@ async function exportExcel(){
     toast("엑셀 파일이 저장되었습니다");
 }
 
-/* ── 한글 HWPX (실제 한글 .hwpx 파일을 템플릿으로 사용) ──
-   고정 부품(header/settings/version/container/manifest/rdf/Preview)은 한글이 만든 파일을 그대로 쓰고,
-   section0.xml·content.hpf·BinData(사진)만 생성한다. 제목 charPr=7(큰 글씨), 가운데 paraPr=21/25 사용. */
+/* ── 한글 HWPX (실제 한글 .hwpx를 템플릿 + 실제 hp:pic 구조를 복제) ──
+   고정 부품(header/settings/version/container/manifest/rdf/Preview)은 한글 저장본 그대로,
+   section0.xml·content.hpf·BinData(사진)만 생성. 사진 구조는 한글이 저장한 hp:pic을 그대로 복제. */
 const HU=v=>Math.round(v*283.465); // mm→HWPUNIT(1/7200 inch)
 function b64ToBytes(s){const bin=atob(s);const a=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return a;}
 function dataURLBytes(u){return b64ToBytes(u.split(",")[1]);}
 const HWPX_NS_OPF='xmlns:ha="http://www.hancom.co.kr/hwpml/2011/app" xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph" xmlns:hp10="http://www.hancom.co.kr/hwpml/2016/paragraph" xmlns:hs="http://www.hancom.co.kr/hwpml/2011/section" xmlns:hc="http://www.hancom.co.kr/hwpml/2011/core" xmlns:hh="http://www.hancom.co.kr/hwpml/2011/head" xmlns:hhs="http://www.hancom.co.kr/hwpml/2011/history" xmlns:hm="http://www.hancom.co.kr/hwpml/2011/master-page" xmlns:hpf="http://www.hancom.co.kr/schema/2011/hpf" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf/" xmlns:ooxmlchart="http://www.hancom.co.kr/hwpml/2016/ooxmlchart" xmlns:hwpunitchar="http://www.hancom.co.kr/hwpml/2016/HwpUnitChar" xmlns:epub="http://www.idpf.org/2007/ops" xmlns:config="urn:oasis:names:tc:opendocument:xmlns:config:1.0"';
+let HWPX_PID=0;
+function hpid(){return HWPX_PID++===0?"0":String(1500000000+HWPX_PID);}
 function hwpxLineseg(vs){const v=vs||1000;return '<hp:linesegarray><hp:lineseg textpos="0" vertpos="0" vertsize="'+v+'" textheight="'+v+'" baseline="'+Math.round(v*0.85)+'" spacing="'+Math.round(v*0.5)+'" horzpos="0" horzsize="51024" flags="393216"/></hp:linesegarray>';}
-function hwpxPicRun(id,wmm,hmm,inst){const w=HU(wmm),h=HU(hmm);
-  return `<hp:run charPrIDRef="0"><hp:pic reverse="0" id="${inst}" zOrder="0" numberingType="PICTURE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" href="" groupLevel="0" instid="${inst}"><hp:sz width="${w}" widthRelTo="ABSOLUTE" height="${h}" heightRelTo="ABSOLUTE" protect="0"/><hp:pos treatAsChar="1" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="COLUMN" vertAlign="TOP" horzAlign="CENTER" vertOffset="0" horzOffset="0"/><hp:outMargin left="0" right="0" top="0" bottom="0"/><hp:imgRect><hc:pt0 x="0" y="0"/><hc:pt1 x="${w}" y="0"/><hc:pt2 x="${w}" y="${h}"/><hc:pt3 x="0" y="${h}"/></hp:imgRect><hp:imgClip left="0" right="${w}" top="0" bottom="${h}"/><hp:inMargin left="0" right="0" top="0" bottom="0"/><hp:imgDim dimwidth="${w}" dimheight="${h}"/><hp:img binaryItemIDRef="${id}" bright="0" contrast="0" effect="REAL_PIC" alpha="0.0"/></hp:pic></hp:run>`;
+/* 한글이 저장한 hp:pic 구조를 그대로 복제 (자식 순서·hc:img·행렬 포함) */
+function hwpxPicRun(id,wmm,hmm,pxW,pxH,inst){
+  const curW=HU(wmm),curH=HU(hmm), orgW=pxW*100,orgH=pxH*100;
+  const sx=(curW/orgW).toFixed(6),sy=(curH/orgH).toFixed(6);
+  return `<hp:run charPrIDRef="0"><hp:pic id="${inst}" zOrder="0" numberingType="PICTURE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" href="" groupLevel="0" instid="${inst}" reverse="0"><hp:offset x="0" y="0"/><hp:orgSz width="${orgW}" height="${orgH}"/><hp:curSz width="${curW}" height="${curH}"/><hp:flip horizontal="0" vertical="0"/><hp:rotationInfo angle="0" centerX="${Math.round(curW/2)}" centerY="${Math.round(curH/2)}" rotateimage="1"/><hp:renderingInfo><hc:transMatrix e1="1" e2="0" e3="0" e4="0" e5="1" e6="0"/><hc:scaMatrix e1="${sx}" e2="0" e3="0" e4="0" e5="${sy}" e6="0"/><hc:rotMatrix e1="1" e2="0" e3="0" e4="0" e5="1" e6="0"/></hp:renderingInfo><hp:imgRect><hc:pt0 x="0" y="0"/><hc:pt1 x="${orgW}" y="0"/><hc:pt2 x="${orgW}" y="${orgH}"/><hc:pt3 x="0" y="${orgH}"/></hp:imgRect><hp:imgClip left="0" right="${orgW}" top="0" bottom="${orgH}"/><hp:inMargin left="0" right="0" top="0" bottom="0"/><hp:imgDim dimwidth="${orgW}" dimheight="${orgH}"/><hc:img binaryItemIDRef="${id}" bright="0" contrast="0" effect="REAL_PIC" alpha="0"/><hp:effects/><hp:sz width="${curW}" widthRelTo="ABSOLUTE" height="${curH}" heightRelTo="ABSOLUTE" protect="0"/><hp:pos treatAsChar="1" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="COLUMN" vertAlign="TOP" horzAlign="CENTER" vertOffset="0" horzOffset="0"/><hp:outMargin left="0" right="0" top="0" bottom="0"/></hp:pic></hp:run>`;
 }
-const hwpxTextP=(t,pp,cp,vs)=>`<hp:p id="0" paraPrIDRef="${pp}" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="${cp}"><hp:t>${escapeHtml(t)}</hp:t></hp:run>${hwpxLineseg(vs)}</hp:p>`;
+const hwpxTextP=(t,pp,cp,vs)=>`<hp:p id="${hpid()}" paraPrIDRef="${pp}" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="${cp}"><hp:t>${escapeHtml(t)}</hp:t></hp:run>${hwpxLineseg(vs)}</hp:p>`;
 async function exportHWPX(){
   if(typeof fflate==="undefined"||!window.HWPX_TPL){toast("한글 생성 모듈을 불러오지 못했습니다");return;}
   const TPL=window.HWPX_TPL, dec=new TextDecoder();
@@ -1108,26 +1113,28 @@ async function exportHWPX(){
   const L=computeLayout(), aspect=L.aspect;
   let baseW=(aspect>=1?165:120)*(state.size/100);
   const wmm=Math.max(60,Math.min(175,baseW)), hmm=wmm/aspect;
+  const pxW=Math.round(wmm*MM*3), pxH=Math.round(hmm*MM*3);
   const secPr=dec.decode(b64ToBytes(TPL.secPr)), secOpen=dec.decode(b64ToBytes(TPL.secOpen));
-  const bin={}; let idx=1, inst=1; const imgItems=[];
-  // 제목(첫 문단에 secPr+단 설정 포함, 가운데 paraPr=21, 큰 글씨 charPr=7)
-  let body=`<hp:p id="0" paraPrIDRef="21" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="0">${secPr}<hp:ctrl><hp:colPr id="" type="NEWSPAPER" layout="LEFT" colCount="1" sameSz="1" sameGap="0"/></hp:ctrl></hp:run><hp:run charPrIDRef="7"><hp:t>${escapeHtml(name)}</hp:t></hp:run>${hwpxLineseg(2200)}</hp:p>`;
+  const bin={}; let idx=1, inst=1700000000; const imgItems=[];
+  HWPX_PID=0;
+  // 제목(첫 문단 id=0, secPr+단 설정, 가운데 paraPr=21, 큰 글씨 charPr=7)
+  let body=`<hp:p id="${hpid()}" paraPrIDRef="21" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="0">${secPr}<hp:ctrl><hp:colPr id="" type="NEWSPAPER" layout="LEFT" colCount="1" sameSz="1" sameGap="0"/></hp:ctrl></hp:run><hp:run charPrIDRef="0"></hp:run><hp:run charPrIDRef="7"><hp:t>${escapeHtml(name)}</hp:t></hp:run>${hwpxLineseg(2200)}</hp:p>`;
   for(const st of STAGES){
     const arr=state.stages[st.key]; if(!arr.length) continue;
     body+=hwpxTextP("■ "+st.ko, 11, 8, 1100); // 구역 제목(좌측 굵게)
     for(const p of arr){
-      const data=await renderCell(p, wmm*MM*3, hmm*MM*3);
+      const data=await renderCell(p, pxW, pxH);
       const id="image"+idx, file=id+".jpg";
       bin["BinData/"+file]=dataURLBytes(data);
-      imgItems.push(`<opf:item id="${id}" href="BinData/${file}" media-type="image/jpeg"/>`);
-      body+=`<hp:p id="0" paraPrIDRef="21" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">${hwpxPicRun(id,wmm,hmm,inst++)}${hwpxLineseg(HU(hmm))}</hp:p>`;
+      imgItems.push(`<opf:item id="${id}" href="BinData/${file}" media-type="image/jpg" isEmbeded="1"/>`);
+      body+=`<hp:p id="${hpid()}" paraPrIDRef="21" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0">${hwpxPicRun(id,wmm,hmm,pxW,pxH,inst++)}${hwpxLineseg(HU(hmm))}</hp:p>`;
       body+=hwpxTextP("["+st.ko+"] "+(p.desc||""), 25, 0, 1000); // 설명(가운데)
       idx++;
     }
   }
   if(idx===1){toast("사진을 먼저 추가하세요");return;}
   const section=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n${secOpen}${body}</hs:sec>`;
-  const contentHpf=`<?xml version="1.0" encoding="UTF-8" standalone="yes" ?><opf:package ${HWPX_NS_OPF} version="" unique-identifier="" id=""><opf:metadata><opf:title>${escapeHtml(name)}</opf:title><opf:language>ko</opf:language></opf:metadata><opf:manifest><opf:item id="header" href="Contents/header.xml" media-type="application/xml"/><opf:item id="section0" href="Contents/section0.xml" media-type="application/xml"/><opf:item id="settings" href="settings.xml" media-type="application/xml"/>${imgItems.join("")}</opf:manifest><opf:spine><opf:itemref idref="header" linear="yes"/><opf:itemref idref="section0"/></opf:spine></opf:package>`;
+  const contentHpf=`<?xml version="1.0" encoding="UTF-8" standalone="yes" ?><opf:package ${HWPX_NS_OPF} version="" unique-identifier="" id=""><opf:metadata><opf:title>${escapeHtml(name)}</opf:title><opf:language>ko</opf:language></opf:metadata><opf:manifest><opf:item id="header" href="Contents/header.xml" media-type="application/xml"/>${imgItems.join("")}<opf:item id="section0" href="Contents/section0.xml" media-type="application/xml"/><opf:item id="settings" href="settings.xml" media-type="application/xml"/></opf:manifest><opf:spine><opf:itemref idref="header" linear="yes"/><opf:itemref idref="section0" linear="yes"/></opf:spine></opf:package>`;
   const enc=s=>new TextEncoder().encode(s);
   const parts=Object.assign({
     "mimetype":[enc("application/hwp+zip"),{level:0}],
