@@ -504,6 +504,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   color-scheme:dark;
 }
 *{box-sizing:border-box}
+[hidden]{display:none !important}
 html,body{margin:0}
 body{background:var(--bg); color:var(--fg);
   font-family:"Noto Sans KR","Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif;
@@ -529,11 +530,17 @@ main{max-width:1180px; margin:0 auto; padding:20px max(16px,env(safe-area-inset-
 .project input{width:100%; border:1px solid var(--border); background:var(--surface-2); color:var(--fg); border-radius:10px; padding:12px 14px; font-size:19px; font-weight:700; letter-spacing:-.01em}
 .project input:focus{outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent)}
 
-/* ── Layout block panel ── */
-.lay-head{display:flex;align-items:center;gap:8px;padding:12px 18px;border-bottom:1px solid var(--border);background:var(--surface-3);border-radius:14px 14px 0 0}
+/* ── Two-column layout: work area + right sidebar ── */
+.layout2col{display:flex;gap:18px;align-items:flex-start}
+.work{flex:1 1 auto;min-width:0}
+.side{flex:0 0 272px;width:272px;position:sticky;top:78px}
+@media (max-width:900px){.layout2col{flex-direction:column}.side{order:-1;width:100%;flex:none;position:static;top:auto}}
+
+/* ── Layout block panel (vertical) ── */
+.lay-head{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface-3);border-radius:14px 14px 0 0}
 .lay-head b{font-size:14px}
-.lay-head span{font-size:11.5px;color:var(--muted)}
-.lay-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px 22px;padding:16px 20px}
+.lay-head span{font-size:11px;color:var(--muted)}
+.lay-col{display:flex;flex-direction:column;gap:16px;padding:16px}
 .lay-item>.lab{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:7px;letter-spacing:.02em}
 .lay-item>.lab .hint{font-weight:500;color:var(--muted);font-size:10.5px}
 .seg{display:flex;gap:4px;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:3px}
@@ -609,6 +616,16 @@ main{max-width:1180px; margin:0 auto; padding:20px max(16px,env(safe-area-inset-
 .foot{max-width:1180px;margin:0 auto;padding:0 20px 40px;color:var(--muted);font-size:12px;line-height:1.7}
 .foot code{background:var(--surface-3);padding:1px 6px;border-radius:5px;font-size:11.5px}
 
+/* ── result preview overlay ── */
+.overlay{position:fixed;inset:0;z-index:100;background:rgba(10,15,20,.74);display:flex;flex-direction:column}
+.ov-bar{display:flex;align-items:center;gap:12px;padding:12px max(16px,env(safe-area-inset-left,0px));background:var(--surface);border-bottom:1px solid var(--border)}
+.ov-bar b{font-size:15px}.ov-bar span{font-size:11.5px;color:var(--muted)}
+.ov-bar button{margin-left:auto;border:1px solid var(--border);background:var(--surface-2);color:var(--fg);border-radius:9px;padding:8px 15px;font-weight:700;cursor:pointer}
+.ov-bar button:hover{border-color:var(--border-strong)}
+.ov-scroll{flex:1;overflow:auto;padding:18px 10px}
+.ov-pages{width:max-content;margin:0 auto}
+.ov-pages .ppage{box-shadow:0 6px 24px rgba(0,0,0,.45);margin:0 auto 18px;outline:1px solid rgba(0,0,0,.2)}
+
 #printArea{display:none}
 @media print{
   @page{size:A4 portrait;margin:0}
@@ -636,64 +653,58 @@ main{max-width:1180px; margin:0 auto; padding:20px max(16px,env(safe-area-inset-
     </div>
   </header>
 
-  <main>
-    <section class="panel project panel-pad">
-      <label for="pname">공사명 (문서 맨 상단에 공통으로 들어갑니다)</label>
-      <input id="pname" type="text" placeholder="예) ○○초등학교 외벽 보수공사" autocomplete="off">
-    </section>
+  <main class="layout2col">
+    <div class="work">
+      <section class="panel project panel-pad">
+        <label for="pname">공사명 (문서 맨 상단에 공통으로 들어갑니다)</label>
+        <input id="pname" type="text" placeholder="예) ○○초등학교 외벽 보수공사" autocomplete="off">
+      </section>
 
-    <section class="panel">
-      <div class="lay-head">🧱 <b>레이아웃 블록</b> <span>— 칸 배치·모양·크기를 정하면 편집 화면과 결과물에 바로 적용됩니다</span></div>
-      <div class="lay-grid">
-        <div class="lay-item">
-          <div class="lab">한 줄 사진 수</div>
-          <div class="seg" id="segRow">
-            <button data-v="1" aria-pressed="false"><span class="ico">▭</span>1장</button>
-            <button data-v="2" aria-pressed="true"><span class="ico">▭▭</span>2장</button>
-            <button data-v="3" aria-pressed="false"><span class="ico">▭▭▭</span>3장</button>
-            <button data-v="4" aria-pressed="false"><span class="ico">▭▭▭▭</span>4장</button>
+      <section id="stages"></section>
+
+      <section class="panel export panel-pad">
+        <h3>문서 만들기</h3>
+        <p class="hint">형식을 고르고 <b>문서 생성</b>을 누르면 파일로 저장됩니다. 바로 종이에 뽑으려면 <b>인쇄</b> 버튼을 누르세요. 편집 화면의 레이아웃 그대로 들어갑니다.</p>
+        <div class="fmt">
+          <label><input type="radio" name="fmt" value="xlsx" checked>
+            <span class="fi x">XLS</span><span><b>엑셀 (.xlsx)</b><span class="d">전·중·후 시트 자동 분리</span></span></label>
+          <label><input type="radio" name="fmt" value="pdf">
+            <span class="fi p">PDF</span><span><b>PDF 파일 (.pdf)</b><span class="d">편집 화면 그대로 저장</span></span></label>
+        </div>
+        <div class="go">
+          <button class="btn" id="make">문서 생성</button>
+          <button class="btn sec" id="previewBtn">👁 미리보기</button>
+          <button class="btn sec" id="print">🖨 인쇄</button>
+          <span class="note" id="statline"></span>
+        </div>
+      </section>
+    </div>
+
+    <aside class="side">
+      <section class="panel">
+        <div class="lay-head">🧱 <b>레이아웃 블록</b></div>
+        <div class="lay-col">
+          <div class="lay-item">
+            <div class="lab">한 줄 사진 수</div>
+            <div class="seg" id="segRow">
+              <button data-v="1" aria-pressed="false"><span class="ico">▭</span>1장</button>
+              <button data-v="2" aria-pressed="true"><span class="ico">▭▭</span>2장</button>
+            </div>
+          </div>
+          <div class="lay-item">
+            <div class="lab">사진 모양 <span class="hint">칸 비율</span></div>
+            <div class="seg" id="segShape">
+              <button data-v="landscape" aria-pressed="true"><span class="ico">▭</span>가로</button>
+              <button data-v="portrait" aria-pressed="false"><span class="ico">▯</span>세로</button>
+            </div>
+          </div>
+          <div class="lay-item">
+            <div class="lab">사진 크기 <span class="hint">칸 크기</span></div>
+            <div class="rng"><input type="range" id="rngSize" min="30" max="100" step="5" value="100"><span class="val" id="sizeVal">100%</span></div>
           </div>
         </div>
-        <div class="lay-item">
-          <div class="lab">사진 모양 <span class="hint">칸 비율</span></div>
-          <div class="seg" id="segShape">
-            <button data-v="landscape" aria-pressed="true"><span class="ico">▭</span>가로</button>
-            <button data-v="portrait" aria-pressed="false"><span class="ico">▯</span>세로</button>
-            <button data-v="square" aria-pressed="false"><span class="ico">◻</span>정사각</button>
-            <button data-v="original" aria-pressed="false"><span class="ico">⬚</span>원본</button>
-          </div>
-        </div>
-        <div class="lay-item">
-          <div class="lab">사진 크기 <span class="hint">칸 크기</span></div>
-          <div class="rng"><input type="range" id="rngSize" min="30" max="100" step="5" value="100"><span class="val" id="sizeVal">100%</span></div>
-        </div>
-        <div class="lay-item">
-          <div class="lab">쪽 나눔 <span class="hint">인쇄·PDF</span></div>
-          <div class="seg" id="segBreak">
-            <button data-v="flow" aria-pressed="false">이어서</button>
-            <button data-v="section" aria-pressed="true">구역마다 새 쪽</button>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section id="stages"></section>
-
-    <section class="panel export panel-pad">
-      <h3>문서 만들기</h3>
-      <p class="hint">형식을 고르고 <b>문서 생성</b>을 누르면 파일로 저장됩니다. 바로 종이에 뽑으려면 <b>인쇄</b> 버튼을 누르세요. 편집 화면의 레이아웃 그대로 들어갑니다.</p>
-      <div class="fmt">
-        <label><input type="radio" name="fmt" value="xlsx" checked>
-          <span class="fi x">XLS</span><span><b>엑셀 (.xlsx)</b><span class="d">전·중·후 시트 자동 분리</span></span></label>
-        <label><input type="radio" name="fmt" value="pdf">
-          <span class="fi p">PDF</span><span><b>PDF 파일 (.pdf)</b><span class="d">편집 화면 그대로 저장</span></span></label>
-      </div>
-      <div class="go">
-        <button class="btn" id="make">문서 생성</button>
-        <button class="btn sec" id="print">🖨 인쇄</button>
-        <span class="note" id="statline"></span>
-      </div>
-    </section>
+      </section>
+    </aside>
   </main>
 
   <div class="foot">
@@ -702,16 +713,24 @@ main{max-width:1180px; margin:0 auto; padding:20px max(16px,env(safe-area-inset-
   </div>
 </div>
 
+<div class="overlay" id="previewOv" hidden>
+  <div class="ov-bar"><b>미리보기</b><span>결과물 모습입니다 · 실제 저장·인쇄는 내려받은 파일에서 됩니다</span><button id="ovClose">닫기 ✕</button></div>
+  <div class="ov-scroll"><div class="ov-pages" id="ovPages"></div></div>
+</div>
 <div id="printArea"></div>
 <div class="toast" id="toast"></div>
 
 <script>
 "use strict";
 const STAGES=[{key:"before",ko:"공사 전"},{key:"during",ko:"공사 중"},{key:"after",ko:"공사 후"}];
-const state={perRow:2, shape:"landscape", size:100, pageBreak:"section",
+const state={perRow:2, shape:"landscape", size:100, pageBreak:"flow",
   stages:{before:[],during:[],after:[]}};
 let uid=1;
 const $=s=>document.querySelector(s);
+/* 라이브(아트팩트) 미리보기에서는 downloads 권한으로 저장, 내려받은 파일에서는 기본 방식 */
+const IS_ARTIFACT=!!(window.claude&&window.claude.use);
+let CLAUDE_DL=null;
+if(IS_ARTIFACT){try{window.claude.use("downloads").then(d=>{CLAUDE_DL=d;}).catch(()=>{});}catch(e){}}
 const toastEl=$("#toast"); let toastT;
 function toast(m){toastEl.textContent=m;toastEl.classList.add("on");clearTimeout(toastT);toastT=setTimeout(()=>toastEl.classList.remove("on"),2200);}
 function escapeHtml(s){return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
@@ -873,14 +892,14 @@ function enableDrag(box,img,p){
   img.addEventListener("pointerup",end);img.addEventListener("pointercancel",end);
 }
 
-function updateStat(){const n=total();$("#make").disabled=n===0;$("#print").disabled=n===0;
+function updateStat(){const n=total();$("#make").disabled=n===0;$("#print").disabled=n===0;$("#previewBtn").disabled=n===0;
   $("#statline").textContent=n?`총 ${n}장`:"사진을 먼저 추가하세요";}
 
 /* ── layout controls ── */
 function wireSeg(id,key,cb){const el=$(id);el.querySelectorAll("button").forEach(b=>b.onclick=()=>{
   el.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed","false"));
   b.setAttribute("aria-pressed","true");let v=b.dataset.v;if(key==="perRow")v=+v;state[key]=v;if(cb)cb();render();});}
-wireSeg("#segRow","perRow");wireSeg("#segShape","shape");wireSeg("#segBreak","pageBreak");
+wireSeg("#segRow","perRow");wireSeg("#segShape","shape");
 $("#rngSize").addEventListener("input",e=>{state.size=+e.target.value;$("#sizeVal").textContent=state.size+"%";
   const g=document.querySelector(".cells");if(g)document.querySelectorAll(".cells").forEach(x=>x.style.maxWidth=state.size+"%");});
 
@@ -947,8 +966,15 @@ function pageDOM(pages,name){
   return frag;
 }
 
-/* download helpers */
-function download(blob,fn){const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=fn;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1500);}
+/* download helpers — 아트팩트면 claude 저장, 아니면 앵커 다운로드. 성공 여부 반환 */
+async function download(blob,fn){
+  if(CLAUDE_DL){
+    try{await CLAUDE_DL.save({filename:fn,data:blob});return true;}
+    catch(e){toast(e&&e.code==="declined"?"저장을 취소했습니다":"저장할 수 없습니다");return false;}
+  }
+  try{const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download=fn;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1500);return true;}
+  catch(e){return false;}
+}
 function fileStamp(){const d=new Date(),z=n=>String(n).padStart(2,"0");return `${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}`;}
 function safeName(){return (projectName()||"공사사진대지").replace(/[\\/:*?"<>|]/g,"_");}
 
@@ -968,12 +994,13 @@ async function exportPDF(){
       const img=canvas.toDataURL("image/jpeg",0.92);
       if(i>0)pdf.addPage();pdf.addImage(img,"JPEG",0,0,pw,ph);
     }
-    download(pdf.output("blob"),`${safeName()}_${fileStamp()}.pdf`);toast("PDF 파일이 저장되었습니다");
+    if(await download(pdf.output("blob"),`${safeName()}_${fileStamp()}.pdf`))toast("PDF 파일이 저장되었습니다");
   } finally { host.remove(); }
 }
 /* ── Print ── */
 async function doPrint(){
   if(total()===0){toast("사진을 먼저 추가하세요");return;}
+  if(IS_ARTIFACT){toast("미리보기 화면에서는 바로 인쇄가 안 돼요 — ‘PDF’로 저장해 인쇄하세요");await showPreview();return;}
   const name=projectName()||"공사 사진대지";
   const pages=await buildPageModel();
   const area=$("#printArea");area.innerHTML="";area.appendChild(pageDOM(pages,name));
@@ -1023,9 +1050,26 @@ async function exportExcel(){
   }
   if(!made){toast("사진을 먼저 추가하세요");return;}
   const buf=await wb.xlsx.writeBuffer();
-  download(new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}),`${safeName()}_${fileStamp()}.xlsx`);
-  toast("엑셀 파일이 저장되었습니다");
+  if(await download(new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}),`${safeName()}_${fileStamp()}.xlsx`))
+    toast("엑셀 파일이 저장되었습니다");
 }
+
+/* ── result preview (화면에서 결과 보기) ── */
+async function showPreview(){
+  if(total()===0){toast("사진을 먼저 추가하세요");return;}
+  const name=projectName()||"공사 사진대지";
+  const pages=await buildPageModel();
+  const host=$("#ovPages");host.innerHTML="";host.appendChild(pageDOM(pages,name));
+  if(document.fonts&&document.fonts.ready)await document.fonts.ready;
+  const scale=Math.min(1,(window.innerWidth-28)/794); // 210mm≈794px
+  host.style.zoom=scale; if(host.style.zoom==="")host.style.transform="scale("+scale+")",host.style.transformOrigin="top center";
+  $("#previewOv").hidden=false;document.body.style.overflow="hidden";
+}
+function closePreview(){$("#previewOv").hidden=true;document.body.style.overflow="";$("#ovPages").innerHTML="";}
+$("#ovClose").addEventListener("click",closePreview);
+$("#previewOv").addEventListener("click",e=>{if(e.target.id==="previewOv")closePreview();});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("#previewOv").hidden)closePreview();});
+$("#previewBtn").addEventListener("click",async()=>{const b=$("#previewBtn");b.disabled=true;const l=b.textContent;b.textContent="그리는 중…";try{await showPreview();}catch(e){console.error(e);toast("미리보기 생성 중 오류");}b.textContent=l;b.disabled=false;});
 
 /* ── buttons ── */
 let savedTitle=document.title;
