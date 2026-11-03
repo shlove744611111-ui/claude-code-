@@ -533,8 +533,15 @@ main{max-width:1180px; margin:0 auto; padding:20px max(16px,env(safe-area-inset-
 /* ── Two-column layout: work area + right sidebar ── */
 .layout2col{display:flex;gap:18px;align-items:flex-start}
 .work{flex:1 1 auto;min-width:0}
-.side{flex:0 0 272px;width:272px;position:sticky;top:78px}
-@media (max-width:900px){.layout2col{flex-direction:column}.side{order:-1;width:100%;flex:none;position:static;top:auto}}
+.side{flex:0 0 280px;width:280px;position:sticky;top:78px;display:flex;flex-direction:column;gap:16px;max-height:calc(100vh - 92px);overflow:auto}
+.side .panel{margin-bottom:0}
+.side .fmt{grid-template-columns:1fr;gap:8px}
+.side .export h3{font-size:14px}
+.side .export .hint{margin-bottom:12px;font-size:11.5px}
+.side .export .go{flex-direction:column;align-items:stretch;gap:8px}
+.side .export .go .btn{width:100%;padding:12px}
+.side .export .go .note{text-align:center}
+@media (max-width:900px){.layout2col{flex-direction:column}.side{width:100%;flex:none;position:static;top:auto;max-height:none;overflow:visible}}
 
 /* ── Layout block panel (vertical) ── */
 .lay-head{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface-3);border-radius:14px 14px 0 0}
@@ -661,23 +668,6 @@ main{max-width:1180px; margin:0 auto; padding:20px max(16px,env(safe-area-inset-
       </section>
 
       <section id="stages"></section>
-
-      <section class="panel export panel-pad">
-        <h3>문서 만들기</h3>
-        <p class="hint">형식을 고르고 <b>문서 생성</b>을 누르면 파일로 저장됩니다. 바로 종이에 뽑으려면 <b>인쇄</b> 버튼을 누르세요. 편집 화면의 레이아웃 그대로 들어갑니다.</p>
-        <div class="fmt">
-          <label><input type="radio" name="fmt" value="xlsx" checked>
-            <span class="fi x">XLS</span><span><b>엑셀 (.xlsx)</b><span class="d">전·중·후 시트 자동 분리</span></span></label>
-          <label><input type="radio" name="fmt" value="pdf">
-            <span class="fi p">PDF</span><span><b>PDF 파일 (.pdf)</b><span class="d">편집 화면 그대로 저장</span></span></label>
-        </div>
-        <div class="go">
-          <button class="btn" id="make">문서 생성</button>
-          <button class="btn sec" id="previewBtn">👁 미리보기</button>
-          <button class="btn sec" id="print">🖨 인쇄</button>
-          <span class="note" id="statline"></span>
-        </div>
-      </section>
     </div>
 
     <aside class="side">
@@ -702,6 +692,23 @@ main{max-width:1180px; margin:0 auto; padding:20px max(16px,env(safe-area-inset-
             <div class="lab">사진 크기 <span class="hint">칸 크기</span></div>
             <div class="rng"><input type="range" id="rngSize" min="30" max="100" step="5" value="100"><span class="val" id="sizeVal">100%</span></div>
           </div>
+        </div>
+      </section>
+
+      <section class="panel export panel-pad">
+        <h3>문서 만들기</h3>
+        <p class="hint">형식을 고르고 <b>문서 생성</b>을 누르면 파일로 저장됩니다. 편집 화면의 레이아웃 그대로 들어갑니다.</p>
+        <div class="fmt">
+          <label><input type="radio" name="fmt" value="xlsx" checked>
+            <span class="fi x">XLS</span><span><b>엑셀 (.xlsx)</b><span class="d">전·중·후 시트 자동 분리</span></span></label>
+          <label><input type="radio" name="fmt" value="pdf">
+            <span class="fi p">PDF</span><span><b>PDF 파일 (.pdf)</b><span class="d">편집 화면 그대로 저장</span></span></label>
+        </div>
+        <div class="go">
+          <button class="btn" id="make">문서 생성</button>
+          <button class="btn sec" id="previewBtn">👁 미리보기</button>
+          <button class="btn sec" id="print">🖨 인쇄</button>
+          <span class="note" id="statline"></span>
         </div>
       </section>
     </aside>
@@ -808,7 +815,8 @@ function render(){
     const sec=document.createElement("section");sec.className="stage";sec.dataset.s=st.key;
     const head=document.createElement("div");head.className="stage-head";
     head.innerHTML=`<span class="dot"></span><h2>${st.ko}</h2><span class="count">${arr.length}장</span>`;
-    const add=document.createElement("button");add.className="addbtn";add.textContent="+ 사진 추가";
+    const add=document.createElement("button");add.className="addbtn";
+    add.textContent=st.key==="before"?"📥 일괄 사진 추가":"+ 사진 추가";
     const fileIn=document.createElement("input");fileIn.type="file";fileIn.accept="image/*";fileIn.multiple=true;fileIn.hidden=true;
     add.onclick=()=>fileIn.click();fileIn.onchange=()=>{addFiles(fileIn.files,st.key);fileIn.value="";};
     head.appendChild(add);head.appendChild(fileIn);sec.appendChild(head);
