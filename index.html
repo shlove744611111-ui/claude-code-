@@ -584,6 +584,41 @@ main{max-width:1180px; margin:0 auto; padding:20px max(16px,env(safe-area-inset-
 .foot{max-width:1180px;margin:0 auto;padding:0 20px 40px;color:var(--muted);font-size:12px;line-height:1.7}
 .foot code{background:var(--surface-3);padding:1px 6px;border-radius:5px;font-size:11.5px}
 
+/* ── 공사사진대장 문서 페이지(편집 화면) ── */
+.docpage{background:#fff;color:#161616;border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow);max-width:840px;margin:0 auto;padding:26px 30px}
+.dp-title{text-align:center;font-size:25px;font-weight:900;letter-spacing:7px;color:#111}
+.dp-sub{text-align:center;font-size:13.5px;color:#555;margin:3px 0 16px;border-bottom:2px solid #111;padding-bottom:9px}
+.dp-sub b{font-weight:700;color:#111;letter-spacing:0}
+.dp-sec{margin-bottom:16px}
+.dp-sec-label{font-size:13.5px;font-weight:800;color:#1a2733;margin:0 0 7px;display:flex;align-items:center;gap:7px}
+.dp-no{background:var(--accent);color:#fff;font-size:11.5px;border-radius:5px;padding:2px 7px;font-weight:800}
+.dp-ov{width:100%;border-collapse:collapse;font-size:12.5px}
+.dp-ov th{background:#eef2f6;border:1px solid #c6d0d9;padding:6px 8px;width:82px;font-weight:700;color:#333;white-space:nowrap;text-align:center}
+.dp-ov td{border:1px solid #c6d0d9;padding:2px 4px}
+.dp-ov input{width:100%;border:0;background:transparent;font:inherit;padding:5px 6px;color:#111}
+.dp-ov input:focus{outline:2px solid var(--accent);border-radius:3px}
+.dp-grid{display:grid;grid-template-columns:repeat(var(--cols,2),1fr);gap:10px;margin:0 auto;max-width:var(--gw,100%)}
+.pcell{border:1px solid #b4bec8;border-radius:6px;overflow:hidden;background:#fff;display:flex;flex-direction:column;min-width:0}
+.pcell.dragging{opacity:.35}
+.pcell.dragover{outline:2px dashed var(--accent);outline-offset:-3px}
+.pcell-label{background:#eef2f6;border-bottom:1px solid #d6dde4;font-size:11px;font-weight:700;color:#3a4750;padding:3px 8px;display:flex;align-items:center;gap:5px}
+.pcell-label[draggable=true]{cursor:grab}
+.pcell-label[draggable=true]::before{content:"⠿";color:#9aa7b4;font-size:12px}
+.pcell-photo{position:relative;aspect-ratio:var(--ar,1.33);background:#0d0f12;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.pcell-photo img{width:100%;height:100%;display:block}
+.pcell.empty .pcell-photo{background:#f5f8fb;cursor:pointer;border:2px dashed #c3ccd6;margin:0}
+.pcell.empty .pcell-photo:hover{border-color:var(--accent);background:#eef5fb}
+.pcell-empty-in{color:#9aa7b4;font-size:12.5px;font-weight:700;text-align:center;line-height:1.5;pointer-events:none}
+.ptools{position:absolute;top:0;left:0;right:0;display:flex;flex-wrap:wrap;gap:3px;padding:4px;background:linear-gradient(rgba(0,0,0,.6),transparent);opacity:0;transition:opacity .1s}
+.pcell-photo:hover .ptools,.pcell-photo:focus-within .ptools{opacity:1}
+.ptools button{border:0;background:rgba(255,255,255,.93);color:#1d2733;font-size:11px;font-weight:700;border-radius:5px;padding:3px 7px;cursor:pointer;line-height:1}
+.ptools button.on{background:var(--accent);color:#fff}
+.ptools button.x{margin-left:auto;background:rgba(192,57,43,.92);color:#fff}
+.pcell-cap{border:0;border-top:1px solid #d6dde4;background:#fff;color:#111;padding:5px 8px;font:inherit;font-size:12px;resize:none;min-height:30px;line-height:1.4}
+.pcell-cap:focus{outline:2px solid var(--accent);outline-offset:-2px}
+.pcell-cap:disabled{background:#fafbfc;color:#aaa}
+.dp-foot{text-align:center;font-size:11px;color:#888;border-top:1px solid #ccc;margin-top:14px;padding-top:8px}
+
 /* ── result preview overlay ── */
 .overlay{position:fixed;inset:0;z-index:100;background:rgba(10,15,20,.74);display:flex;flex-direction:column}
 .ov-bar{display:flex;align-items:center;gap:12px;padding:12px max(16px,env(safe-area-inset-left,0px));background:var(--surface);border-bottom:1px solid var(--border)}
@@ -645,6 +680,18 @@ main{max-width:1180px; margin:0 auto; padding:20px max(16px,env(safe-area-inset-
             </div>
           </div>
           <div class="lay-item">
+            <div class="seg" id="segRow">
+              <button data-v="1"><span class="ico">▭</span>1장</button>
+              <button data-v="2"><span class="ico">▭▭</span>2장</button>
+            </div>
+          </div>
+          <div class="lay-item">
+            <div class="seg" id="segShape">
+              <button data-v="landscape"><span class="ico">▭</span>가로</button>
+              <button data-v="portrait"><span class="ico">▯</span>세로</button>
+            </div>
+          </div>
+          <div class="lay-item">
             <div class="lab">칸 크기</div>
             <div class="rng"><input type="range" id="rngSize" min="30" max="100" step="5" value="100"><span class="val" id="sizeVal">100%</span></div>
           </div>
@@ -688,6 +735,7 @@ main{max-width:1180px; margin:0 auto; padding:20px max(16px,env(safe-area-inset-
 "use strict";
 const STAGES=[{key:"before",ko:"공사 전"},{key:"during",ko:"공사 중"},{key:"after",ko:"공사 후"}];
 const state={perRow:1, shape:"landscape", size:100, pageBreak:"flow",
+  overview:{period:"",place:"",company:"",detail:""},
   stages:{before:[],during:[],after:[]}};
 let uid=1;
 const $=s=>document.querySelector(s);
@@ -757,12 +805,15 @@ function total(){return STAGES.reduce((n,s)=>n+state.stages[s.key].length,0);}
 function projectName(){return $("#pname").value.trim();}
 
 /* ── add / replace files ── */
-function addFiles(files,stage){
+function addFiles(files,stage,at){
   const imgs=[...files].filter(f=>f.type.startsWith("image/"));
   if(!imgs.length){toast("이미지 파일만 넣을 수 있어요");return;}
   let pending=imgs.length,ok=0;
+  const arr=state.stages[stage];
+  let ins=(typeof at==="number")?Math.min(at,arr.length):arr.length; // 빈 칸에 떨구면 그 위치에 삽입
   imgs.forEach(file=>normalizeImage(file).then(n=>{
-    state.stages[stage].push({id:uid++,dataURL:n.dataURL,name:file.name,desc:"",w:n.w,h:n.h,fit:"cover",posX:50,posY:50});ok++;
+    const photo={id:uid++,dataURL:n.dataURL,name:file.name,desc:"",w:n.w,h:n.h,fit:"cover",posX:50,posY:50};
+    if(ins>=arr.length)arr.push(photo);else{arr.splice(ins,0,photo);} ins++;ok++;
   }).catch(()=>{}).finally(()=>{if(--pending===0){render();toast(ok+"장 추가됨");}else render();}));
 }
 function replaceFile(photo){
@@ -772,107 +823,100 @@ function replaceFile(photo){
   inp.click();
 }
 
-/* ── render editor (WYSIWYG) ── */
+/* ── render editor as a 공사사진대장 document page (WYSIWYG) ── */
+function cellCount(n){return Math.max(state.perRow, Math.ceil((n+1)/state.perRow)*state.perRow);}
 function render(){
   const root=$("#stages");root.innerHTML="";
-  STAGES.forEach(st=>{
+  const page=document.createElement("div");page.className="docpage";
+  const title=document.createElement("div");title.className="dp-title";title.textContent="공 사 사 진 대 장";page.appendChild(title);
+  const sub=document.createElement("div");sub.className="dp-sub";sub.innerHTML='공사명 <b id="dpName"></b>';page.appendChild(sub);
+  // 공사 개요
+  const ov=state.overview;
+  const ovSec=document.createElement("div");ovSec.className="dp-sec";
+  ovSec.innerHTML='<div class="dp-sec-label"><span class="dp-no">00</span>공사 개요</div>';
+  const tbl=document.createElement("table");tbl.className="dp-ov";
+  tbl.innerHTML=`<tr><th>공사 기간</th><td><input data-ov="period" value="${escapeHtml(ov.period)}" placeholder="예) 2026.4.1 ~ 2026.4.30"></td><th>공사 장소</th><td><input data-ov="place" value="${escapeHtml(ov.place)}" placeholder="예) 본관 1층"></td></tr>`
+    +`<tr><th>시공 업체</th><td colspan="3"><input data-ov="company" value="${escapeHtml(ov.company)}" placeholder="예) ○○종합건설"></td></tr>`
+    +`<tr><th>공사 내역</th><td colspan="3"><input data-ov="detail" value="${escapeHtml(ov.detail)}" placeholder="예) 노후 타일 및 위생도기 철거·교체"></td></tr>`;
+  tbl.querySelectorAll("input[data-ov]").forEach(inp=>inp.oninput=()=>{state.overview[inp.dataset.ov]=inp.value;});
+  ovSec.appendChild(tbl);page.appendChild(ovSec);
+  // 공사 전/중/후
+  const ar=computeLayout().aspect.toFixed(4);
+  STAGES.forEach((st,si)=>{
     const arr=state.stages[st.key];
-    const sec=document.createElement("section");sec.className="stage";sec.dataset.s=st.key;
-    const head=document.createElement("div");head.className="stage-head";
-    head.innerHTML=`<span class="dot"></span><h2>${st.ko}</h2><span class="count">${arr.length}장</span>`;
-    const add=document.createElement("button");add.className="addbtn";add.textContent="📥 일괄 사진 추가";
-    const fileIn=document.createElement("input");fileIn.type="file";fileIn.accept="image/*";fileIn.multiple=true;fileIn.hidden=true;
-    add.onclick=()=>fileIn.click();fileIn.onchange=()=>{addFiles(fileIn.files,st.key);fileIn.value="";};
-    head.appendChild(add);head.appendChild(fileIn);sec.appendChild(head);
-
-    const body=document.createElement("div");body.className="stage-body";
-    if(!arr.length){
-      const drop=makeDrop(st,"이 구역에 사진을 끌어다 놓거나 ‘+ 사진 추가’");
-      body.appendChild(drop);
-    }else{
-      const grid=document.createElement("div");grid.className="cells";
-      grid.style.setProperty("--cols",state.perRow);
-      grid.style.maxWidth=state.size+"%";
-      arr.forEach((p,i)=>grid.appendChild(makeCell(st,p,i,arr)));
-      body.appendChild(grid);
-      const drop=makeDrop(st,"+ 이 구역에 사진 더 넣기");drop.style.marginTop="12px";drop.style.padding="12px";
-      body.appendChild(drop);
-    }
-    sec.appendChild(body);root.appendChild(sec);
+    const sec=document.createElement("div");sec.className="dp-sec";sec.dataset.s=st.key;
+    sec.innerHTML=`<div class="dp-sec-label"><span class="dp-no">0${si+1}</span>${st.ko}</div>`;
+    const grid=document.createElement("div");grid.className="dp-grid";
+    grid.style.setProperty("--cols",state.perRow);grid.style.setProperty("--ar",ar);grid.style.setProperty("--gw",state.size+"%");
+    const n=cellCount(arr.length);
+    for(let i=0;i<n;i++) grid.appendChild(makeCell(st,i,arr[i],ar));
+    sec.appendChild(grid);page.appendChild(sec);
   });
-  updateStat();
+  const foot=document.createElement("div");foot.className="dp-foot";
+  const d=new Date();foot.textContent=`공사 현장 기록 · 작성 ${d.getFullYear()}. ${d.getMonth()+1}. ${d.getDate()}.`;
+  page.appendChild(foot);
+  root.appendChild(page);
+  syncDpName();updateStat();
 }
-function makeDrop(st,label){
-  const drop=document.createElement("div");drop.className="drop";drop.tabIndex=0;
-  drop.innerHTML=`<b>${label}</b>여러 장 한 번에 가능`;
-  const fileIn=document.createElement("input");fileIn.type="file";fileIn.accept="image/*";fileIn.multiple=true;fileIn.hidden=true;
-  drop.appendChild(fileIn);
-  drop.onclick=()=>fileIn.click();
-  drop.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();fileIn.click();}};
-  fileIn.onchange=()=>{addFiles(fileIn.files,st.key);fileIn.value="";};
-  ["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("over");}));
-  ["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("over");}));
-  drop.addEventListener("drop",e=>{if(e.dataTransfer&&e.dataTransfer.files.length)addFiles(e.dataTransfer.files,st.key);});
-  return drop;
+function syncDpName(){const el=document.getElementById("dpName");if(el)el.textContent=projectName()||"공사명을 입력하세요";}
+function makeCell(st,i,p,ar){
+  const cell=document.createElement("div");cell.className="pcell"+(p?"":" empty");cell.dataset.s=st.key;cell.dataset.i=i;
+  const label=document.createElement("div");label.className="pcell-label";label.textContent=String(i+1).padStart(2,"0")+" 현장사진";cell.appendChild(label);
+  const ph=document.createElement("div");ph.className="pcell-photo";ph.style.setProperty("--ar",ar);
+  if(p){
+    const img=document.createElement("img");img.src=p.dataURL;img.alt="";img.draggable=false;
+    img.style.objectFit=p.fit;img.style.objectPosition=p.posX+"% "+p.posY+"%";
+    ph.appendChild(img);
+    const tools=document.createElement("div");tools.className="ptools";
+    tools.appendChild(tbtn("⟳",()=>rotate90(p).then(render),"오른쪽으로 회전"));
+    tools.appendChild(tbtn("바꾸기",()=>replaceFile(p),"다른 사진으로 바꾸기"));
+    const bc=tbtn("꽉",()=>{p.fit="cover";render();},"꽉 채우기");if(p.fit==="cover")bc.classList.add("on");tools.appendChild(bc);
+    const bt=tbtn("전체",()=>{p.fit="contain";p.posX=50;p.posY=50;render();},"전체 보기");if(p.fit==="contain")bt.classList.add("on");tools.appendChild(bt);
+    const bd=tbtn("✕",()=>{state.stages[st.key].splice(i,1);render();},"삭제");bd.classList.add("x");tools.appendChild(bd);
+    ph.appendChild(tools);
+  }else{
+    const em=document.createElement("div");em.className="pcell-empty-in";em.innerHTML="＋<br>사진 넣기";ph.appendChild(em);
+    ph.onclick=()=>pickFiles(st.key);
+  }
+  cell.appendChild(ph);
+  const cap=document.createElement("textarea");cap.className="pcell-cap";cap.rows=1;cap.placeholder="사진 설명";cap.value=p?p.desc:"";
+  if(p)cap.oninput=()=>{p.desc=cap.value;};else cap.disabled=true;
+  cell.appendChild(cap);
+  bindCellDnD(cell,label,st.key,i,!!p);
+  return cell;
 }
-function makeCell(st,p,i,arr){
-  const block=document.createElement("div");block.className="cellblock";
-  const box=document.createElement("div");box.className="photobox"+(p.fit==="cover"?" cover":"");
-  box.style.setProperty("--ar",computeLayout().aspect.toFixed(4));
-  box.style.setProperty("--fit",p.fit);
-  box.style.setProperty("--px",p.posX+"%");box.style.setProperty("--py",p.posY+"%");
-  const img=document.createElement("img");img.src=p.dataURL;img.alt="";img.draggable=false;
-  box.appendChild(img);
-  const idx=document.createElement("span");idx.className="pidx";idx.textContent=i+1;box.appendChild(idx);
-  const tools=document.createElement("div");tools.className="ptools";
-  const bRot=tbtn("⟳ 회전",()=>{rotate90(p).then(render);});
-  const bRep=tbtn("바꾸기",()=>replaceFile(p));
-  const bCover=tbtn("꽉",()=>{p.fit="cover";render();});if(p.fit==="cover")bCover.classList.add("on");
-  const bContain=tbtn("전체",()=>{p.fit="contain";p.posX=50;p.posY=50;render();});if(p.fit==="contain")bContain.classList.add("on");
-  const bDel=tbtn("✕",()=>{arr.splice(i,1);render();});bDel.classList.add("x");
-  [bRot,bRep,bCover,bContain,bDel].forEach(b=>tools.appendChild(b));
-  box.appendChild(tools);
-  if(p.fit==="cover")enableDrag(box,img,p);
-  block.appendChild(box);
-
-  const cap=document.createElement("textarea");cap.className="cap";cap.rows=2;cap.placeholder="사진 설명";cap.value=p.desc;
-  cap.oninput=()=>{p.desc=cap.value;};block.appendChild(cap);
-
-  const foot=document.createElement("div");foot.className="cellfoot";
-  const up=fbtn("↑",i===0,()=>{move(st.key,i,i-1);});
-  const dn=fbtn("↓",i===arr.length-1,()=>{move(st.key,i,i+1);});
-  foot.appendChild(up);foot.appendChild(dn);
-  STAGES.filter(s=>s.key!==st.key).forEach((s,k)=>{const b=fbtn(s.ko,false,()=>{const[it]=arr.splice(i,1);state.stages[s.key].push(it);render();toast("“"+s.ko+"”로 이동");});if(k===0)b.classList.add("mv");foot.appendChild(b);});
-  block.appendChild(foot);
-  return block;
+function tbtn(label,fn,title){const b=document.createElement("button");b.textContent=label;if(title)b.title=title;b.onclick=fn;return b;}
+function pickFiles(stage){const inp=document.createElement("input");inp.type="file";inp.accept="image/*";inp.multiple=true;inp.onchange=()=>{addFiles(inp.files,stage);};inp.click();}
+/* 드래그: 칸 라벨을 잡아 이동(순서/구역 변경), 사진 파일을 칸에 떨구면 추가 */
+function bindCellDnD(cell,label,stage,i,filled){
+  if(filled){label.draggable=true;
+    label.addEventListener("dragstart",e=>{e.dataTransfer.setData("text/cell",stage+":"+i);e.dataTransfer.effectAllowed="move";cell.classList.add("dragging");});
+    label.addEventListener("dragend",()=>cell.classList.remove("dragging"));}
+  cell.addEventListener("dragover",e=>{e.preventDefault();cell.classList.add("dragover");});
+  cell.addEventListener("dragleave",()=>cell.classList.remove("dragover"));
+  cell.addEventListener("drop",e=>{e.preventDefault();cell.classList.remove("dragover");
+    if(e.dataTransfer.files&&e.dataTransfer.files.length){addFiles(e.dataTransfer.files,stage,i);return;}
+    const d=e.dataTransfer.getData("text/cell");if(!d)return;const parts=d.split(":");movePhoto(parts[0],+parts[1],stage,i);});
 }
-function tbtn(label,fn){const b=document.createElement("button");b.textContent=label;b.onclick=fn;return b;}
-function fbtn(label,dis,fn){const b=document.createElement("button");b.textContent=label;b.disabled=dis;b.onclick=fn;return b;}
-function move(stage,from,to){const a=state.stages[stage];if(to<0||to>=a.length)return;const[x]=a.splice(from,1);a.splice(to,0,x);render();}
-
-/* drag to reposition (cover) */
-function enableDrag(box,img,p){
-  let sx,sy,spx,spy,drag=false;
-  img.addEventListener("pointerdown",e=>{drag=true;sx=e.clientX;sy=e.clientY;spx=p.posX;spy=p.posY;
-    box.classList.add("dragging");img.setPointerCapture(e.pointerId);e.preventDefault();});
-  img.addEventListener("pointermove",e=>{if(!drag)return;
-    const w=box.clientWidth||1,h=box.clientHeight||1;
-    p.posX=Math.max(0,Math.min(100,spx-(e.clientX-sx)/w*100));
-    p.posY=Math.max(0,Math.min(100,spy-(e.clientY-sy)/h*100));
-    box.style.setProperty("--px",p.posX+"%");box.style.setProperty("--py",p.posY+"%");});
-  const end=e=>{if(drag){drag=false;box.classList.remove("dragging");try{img.releasePointerCapture(e.pointerId);}catch(_){}}};
-  img.addEventListener("pointerup",end);img.addEventListener("pointercancel",end);
+function movePhoto(ss,si,ts,ti){
+  const src=state.stages[ss];if(si<0||si>=src.length)return;
+  const [item]=src.splice(si,1);
+  const tgt=state.stages[ts];let idx=ti;if(ss===ts&&si<ti)idx=ti-1;if(idx>tgt.length)idx=tgt.length;if(idx<0)idx=0;
+  tgt.splice(idx,0,item);render();
 }
-
 function updateStat(){const n=total();$("#make").disabled=n===0;$("#print").disabled=n===0;$("#previewBtn").disabled=n===0;
-  $("#statline").textContent=n?`총 ${n}장`:"사진을 먼저 추가하세요";}
+  $("#statline").textContent=n?`총 ${n}장`:"빈 칸에 사진을 넣어 주세요";}
 
 /* ── layout controls ── */
 function syncSegs(){
+  $("#segRow").querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",(+b.dataset.v===state.perRow)?"true":"false"));
+  $("#segShape").querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",(b.dataset.v===state.shape)?"true":"false"));
   $("#segPreset").querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",(+b.dataset.r===state.perRow&&b.dataset.shape===state.shape)?"true":"false"));
 }
 function updatePPNote(){const L=computeLayout();$("#ppNote").textContent="한 페이지에 "+L.perPage+"장 ("+state.perRow+"장/줄 × "+L.rows+"줄)";}
 function onLayoutChange(){syncSegs();updatePPNote();render();}
+$("#segRow").querySelectorAll("button").forEach(b=>b.onclick=()=>{state.perRow=+b.dataset.v;onLayoutChange();});
+$("#segShape").querySelectorAll("button").forEach(b=>b.onclick=()=>{state.shape=b.dataset.v;onLayoutChange();});
 $("#segPreset").querySelectorAll("button").forEach(b=>b.onclick=()=>{state.perRow=+b.dataset.r;state.shape=b.dataset.shape;onLayoutChange();});
 $("#rngSize").addEventListener("input",e=>{state.size=+e.target.value;$("#sizeVal").textContent=state.size+"%";
   document.querySelectorAll(".cells").forEach(x=>x.style.maxWidth=state.size+"%");});
@@ -890,12 +934,17 @@ async function buildPageModel(){
       items.push({stageKo:sec.ko, first:i===0, photos:sec.arr.slice(i,i+L.n)});
     }
   }
-  // 한 페이지에 L.rows 줄씩 이어서 채운다
-  const pages=[]; let cur=null;
+  // 한 페이지에 L.rows 줄씩 이어서 채운다. 첫 페이지엔 공사 개요 자리 확보(1줄 양보)
+  const ov=state.overview, hasOv=!!(ov.period||ov.place||ov.company||ov.detail);
+  const firstCap=hasOv?Math.max(0,L.rows-1):L.rows;
+  const pages=[]; let cur=null, cap=0;
   for(const it of items){
-    if(!cur || cur.rows.length>=L.rows){ cur={rows:[]}; pages.push(cur); }
+    if(!cur){ cur={rows:[],overview:hasOv}; pages.push(cur); cap=firstCap; }
+    else if(cur.rows.length>=cap){ cur={rows:[],overview:false}; pages.push(cur); cap=L.rows; }
+    if(cap===0){ cur={rows:[],overview:false}; pages.push(cur); cap=L.rows; } // 개요 전용 페이지 다음에 사진 시작
     cur.rows.push({stageKo:it.stageKo, first:it.first, cellW:L.cellW, cellH:L.cellH, photos:it.photos});
   }
+  if(pages.length===0 && hasOv){ pages.push({rows:[],overview:true}); } // 사진 없어도 개요 페이지
   // 각 칸 이미지를 미리 렌더(px, 2배 해상도)
   for(const pg of pages) for(const row of pg.rows){
     row.cells=[];
@@ -913,6 +962,15 @@ function pageDOM(pages,name){
     // A4 크기를 인라인으로 지정해야 html2canvas(화면 캡처)에서도 정확히 A4로 렌더된다.
     pageEl.style.cssText="width:210mm;height:296mm;box-sizing:border-box;padding:12mm;display:flex;flex-direction:column;overflow:hidden;background:#fff;color:#000;font-family:'Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo',sans-serif";
     let html=`<div style="border-bottom:3px solid #000;padding-bottom:5px;margin-bottom:6px;flex:0 0 auto"><div style="font-size:19px;font-weight:900;text-align:center;letter-spacing:-.5px">${escapeHtml(name)}</div></div>`;
+    if(pg.overview){
+      const ov=state.overview;
+      const th='style="border:1px solid #000;background:#eee;padding:4px 7px;font-weight:700;width:26mm;white-space:nowrap"';
+      const td='style="border:1px solid #000;padding:4px 7px"';
+      html+=`<div style="font-size:12px;font-weight:800;margin:0 0 3px;flex:0 0 auto">■ 공사 개요</div>`
+        +`<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:5mm;flex:0 0 auto"><tr><th ${th}>공사 기간</th><td ${td}>${escapeHtml(ov.period)}</td><th ${th}>공사 장소</th><td ${td}>${escapeHtml(ov.place)}</td></tr>`
+        +`<tr><th ${th}>시공 업체</th><td colspan="3" ${td}>${escapeHtml(ov.company)}</td></tr>`
+        +`<tr><th ${th}>공사 내역</th><td colspan="3" ${td}>${escapeHtml(ov.detail)}</td></tr></table>`;
+    }
     let lastStage=null;
     pg.rows.forEach(row=>{
       if(row.stageKo!==lastStage){html+=`<div style="font-size:12px;font-weight:800;color:#222;margin:4px 0 4px;flex:0 0 auto">■ ${escapeHtml(row.stageKo)}</div>`;lastStage=row.stageKo;}
@@ -1009,6 +1067,15 @@ async function exportHWPX(){
   HWPX_PID=0;
   // 제목(첫 문단 id=0, secPr+단 설정, 가운데 paraPr=21, 큰 글씨 charPr=7)
   let body=`<hp:p id="${hpid()}" paraPrIDRef="21" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="0">${secPr}<hp:ctrl><hp:colPr id="" type="NEWSPAPER" layout="LEFT" colCount="1" sameSz="1" sameGap="0"/></hp:ctrl></hp:run><hp:run charPrIDRef="0"></hp:run><hp:run charPrIDRef="7"><hp:t>${escapeHtml(name)}</hp:t></hp:run>${hwpxLineseg(2200)}</hp:p>`;
+  // 공사 개요(텍스트 줄)
+  const ov=state.overview;
+  if(ov.period||ov.place||ov.company||ov.detail){
+    body+=hwpxTextP("■ 공사 개요", 11, 8, 1100);
+    if(ov.period) body+=hwpxTextP("· 공사 기간 : "+ov.period, 11, 0, 1000);
+    if(ov.place)  body+=hwpxTextP("· 공사 장소 : "+ov.place, 11, 0, 1000);
+    if(ov.company)body+=hwpxTextP("· 시공 업체 : "+ov.company, 11, 0, 1000);
+    if(ov.detail) body+=hwpxTextP("· 공사 내역 : "+ov.detail, 11, 0, 1000);
+  }
   for(const st of STAGES){
     const arr=state.stages[st.key]; if(!arr.length) continue;
     body+=hwpxTextP("■ "+st.ko, 11, 8, 1100); // 구역 제목(좌측 굵게)
@@ -1074,7 +1141,7 @@ $("#make").addEventListener("click",async()=>{
 });
 $("#print").addEventListener("click",async()=>{const b=$("#print");b.disabled=true;try{await doPrint();}catch(e){console.error(e);toast("인쇄 준비 중 오류");}b.disabled=false;});
 window.addEventListener("afterprint",()=>{document.title=savedTitle;});
-$("#pname").addEventListener("input",()=>{});
+$("#pname").addEventListener("input",()=>{syncDpName();});
 
 syncSegs();updatePPNote();render();
 </script>
