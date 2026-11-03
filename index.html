@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>공사 사진대지 생성기</title>
+<title>공사 사진대장 생성기</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap">
@@ -561,6 +561,7 @@ main{max-width:1180px; margin:0 auto; padding:20px max(16px,env(safe-area-inset-
 
 /* ── Export ── */
 .export h3{margin:0 0 4px;font-size:15px}
+.export-body{padding:16px}
 .export .hint{margin:0 0 15px;font-size:12.5px;color:var(--muted)}
 .fmt{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px}
 @media (max-width:620px){.fmt{grid-template-columns:1fr}}
@@ -647,9 +648,8 @@ main{max-width:1180px; margin:0 auto; padding:20px max(16px,env(safe-area-inset-
   <header class="bar">
     <div class="bar-in">
       <div class="brand">
-        <div class="logo">사</div>
         <div style="min-width:0">
-          <h1>공사 사진대지 생성기</h1>
+          <h1>공사 사진대장 생성기</h1>
           <p>레이아웃을 고르고 사진을 넣으면 보이는 그대로 한글·PDF로 만듭니다</p>
         </div>
       </div>
@@ -670,7 +670,7 @@ main{max-width:1180px; margin:0 auto; padding:20px max(16px,env(safe-area-inset-
 
     <aside class="side">
       <section class="panel">
-        <div class="lay-head">🧱 <b>레이아웃</b></div>
+        <div class="lay-head"><b>레이아웃</b></div>
         <div class="lay-col">
           <div class="lay-item">
             <div class="lab">빠른 배치 <span class="hint">한 페이지에</span></div>
@@ -701,8 +701,9 @@ main{max-width:1180px; margin:0 auto; padding:20px max(16px,env(safe-area-inset-
         </div>
       </section>
 
-      <section class="panel export panel-pad">
-        <h3>문서 만들기</h3>
+      <section class="panel export">
+        <div class="lay-head"><b>문서 만들기</b></div>
+        <div class="export-body">
         <p class="hint">형식을 고르고 <b>문서 생성</b>을 누르면 파일로 저장됩니다. 편집 화면의 레이아웃 그대로 들어갑니다.</p>
         <div class="fmt">
           <label><input type="radio" name="fmt" value="hwpx" checked>
@@ -715,6 +716,7 @@ main{max-width:1180px; margin:0 auto; padding:20px max(16px,env(safe-area-inset-
           <button class="btn sec" id="previewBtn">👁 미리보기</button>
           <button class="btn sec" id="print">🖨 인쇄</button>
           <span class="note" id="statline"></span>
+        </div>
         </div>
       </section>
     </aside>
