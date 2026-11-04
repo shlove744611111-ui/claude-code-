@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>장바구니 자동 선택</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header>
+    <h1>장바구니 자동 선택</h1>
+    <p class="sub">지마켓 장바구니에서 엑셀 목록과 <b>상품명이 일치하는 상품만</b> 자동 체크합니다.</p>
+  </header>
+
+  <section class="card">
+    <label class="step">① 구입 물품 엑셀(.xlsx) 선택</label>
+    <input type="file" id="file" accept=".xlsx,.xls,.csv" />
+    <div id="fileInfo" class="muted"></div>
+    <div id="itemList" class="itemlist" hidden></div>
+  </section>
+
+  <section class="card">
+    <label class="step">② 매칭 방법</label>
+    <label class="opt"><input type="radio" name="match" value="partial" checked /> 부분 일치 <span class="muted">(장바구니 상품명 안에 엑셀 품목명이 포함되면 체크 — 권장)</span></label>
+    <label class="opt"><input type="radio" name="match" value="exact" /> 정확히 일치 <span class="muted">(공백 제외하고 완전히 같을 때만)</span></label>
+    <label class="opt"><input type="checkbox" id="uncheckRest" checked /> 목록에 없는 상품은 <b>체크 해제</b></label>
+  </section>
+
+  <section class="card">
+    <label class="step">③ 실행</label>
+    <div class="btnrow">
+      <button id="scanBtn" class="secondary">장바구니 상품 읽기</button>
+      <button id="runBtn" class="primary" disabled>엑셀 목록대로 선택</button>
+    </div>
+    <div id="status" class="status"></div>
+    <div id="result" class="result" hidden></div>
+  </section>
+
+  <footer>
+    <details>
+      <summary>안 될 때 (셀렉터 설정)</summary>
+      <p class="muted small">
+        지마켓이 장바구니 화면을 개편하면 상품을 못 찾을 수 있습니다.
+        먼저 <b>장바구니 상품 읽기</b>로 인식되는 상품명을 확인하세요.
+        0개로 나오면 <code>content.js</code> 상단의 <code>SELECTORS</code> 값을 실제 화면에 맞게 수정해야 합니다.
+        최종 <b>결제·주문</b>은 안전을 위해 직접 눌러 주세요.
+      </p>
+    </details>
+  </footer>
+
+  <script src="lib/xlsx.full.min.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

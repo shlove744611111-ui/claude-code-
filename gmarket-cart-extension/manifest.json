@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "장바구니 자동 선택 (지마켓)",
+  "version": "0.1.0",
+  "description": "엑셀(.xlsx)에 적은 구입 물품 목록과 상품명이 일치하는 상품을 지마켓 장바구니에서 자동으로 체크해 줍니다.",
+  "permissions": ["scripting", "activeTab", "storage"],
+  "host_permissions": [
+    "*://*.gmarket.co.kr/*"
+  ],
+  "action": {
+    "default_title": "장바구니 자동 선택",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.gmarket.co.kr/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
