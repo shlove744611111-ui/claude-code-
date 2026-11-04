@@ -138,22 +138,52 @@ const SELECTORS = {
     return true;
   }
 
-  function matchExcel(cartName, excelItems, mode) {
-    const nc = norm(cartName);
-    if (!nc) return null;
-    for (const { raw, n, toks } of excelItems) {
-      if (!n) continue;
-      if (mode === "exact") {
-        if (nc === n) return raw;
-        continue;
-      }
-      // 부분 일치: 엑셀 품목명의 '모든 단어'가 장바구니 상품명에 들어있으면 일치
-      const maxTok = toks.reduce((m, t) => Math.max(m, t.length), 0);
-      if (toks.length > 0 && maxTok >= 2 && toks.every((t) => nc.includes(t))) return raw;
-      // 장바구니 이름이 짧게 잘려 보이는 경우: 반대 방향 포함도 허용
-      if (nc.length >= 2 && n.includes(nc)) return raw;
+  // 배송비 등 제외 단어 (팝업에서도 거르지만 안전하게 한 번 더)
+  const IGNORE_WORDS = ["배송비", "택배비"];
+  function isIgnoredName(name) {
+    const s = norm(name);
+    return IGNORE_WORDS.some((w) => s.includes(norm(w)));
+  }
+
+  // 엑셀 항목을 매칭용으로 가공. items: [{name, spec}] 또는 문자열(구버전 호환)
+  function prepExcel(items) {
+    return (items || []).map((it) => {
+      const name = (typeof it === "string") ? it : (it && it.name) || "";
+      const spec = (typeof it === "string") ? "" : (it && it.spec) || "";
+      return {
+        name, spec,
+        label: spec ? name + " [" + spec + "]" : name,
+        nameToks: tokenize(name),
+        specToks: tokenize(spec).filter((t) => t.length >= 2),
+        nameNorm: norm(name),
+        bothNorm: norm(name + spec),
+        ignored: isIgnoredName(name),
+      };
+    });
+  }
+
+  // 한 엑셀 항목에 대응하는 장바구니 index 목록을 찾는다.
+  function candidatesFor(e, cart, cartNorm, mode) {
+    const cands = [];
+    if (mode === "exact") {
+      cart.forEach((c, i) => {
+        if (cartNorm[i] === e.nameNorm || cartNorm[i] === e.bothNorm) cands.push(i);
+      });
+      return cands;
     }
-    return null;
+    // 부분 일치: 항목(name)의 '모든 단어'가 장바구니 상품명에 들어있으면 후보
+    const maxTok = e.nameToks.reduce((m, t) => Math.max(m, t.length), 0);
+    cart.forEach((c, i) => {
+      const nc = cartNorm[i];
+      if (e.nameToks.length && maxTok >= 2 && e.nameToks.every((t) => nc.includes(t))) cands.push(i);
+      else if (nc.length >= 2 && e.nameNorm.includes(nc)) cands.push(i); // 장바구니 이름이 짧게 잘린 경우
+    });
+    // 규격으로 좁히기: 후보가 2개 이상일 때만, 규격 단어가 들어있는 것으로 압축 (없으면 그대로 둠)
+    if (e.specToks.length && cands.length > 1) {
+      const narrowed = cands.filter((i) => e.specToks.some((t) => cartNorm[i].includes(t)));
+      if (narrowed.length) return narrowed;
+    }
+    return cands;
   }
 
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
@@ -164,30 +194,30 @@ const SELECTORS = {
         return;
       }
       if (msg && msg.type === "SELECT") {
-        const items = collectCartItems();
-        const excelNorms = (msg.items || []).map((raw) => ({ raw, n: norm(raw), toks: tokenize(raw) }));
-        const matchedExcel = new Set();
-        let checked = 0, uncheckedCount = 0;
-        const matchedNames = [];
+        const cart = collectCartItems();
+        const cartNorm = cart.map((c) => norm(c.name));
+        const excel = prepExcel(msg.items);
+        const toCheck = new Set();        // 체크할 장바구니 index
+        const unmatchedExcel = [];        // 장바구니에서 못 찾은 엑셀 물품
 
-        items.forEach((it) => {
-          const hit = matchExcel(it.name, excelNorms, msg.match);
-          if (hit) {
-            matchedExcel.add(hit);
-            matchedNames.push(it.name);
-            if (setChecked(it.checkbox, true)) checked++;
-          } else if (msg.uncheckRest) {
-            if (setChecked(it.checkbox, false)) uncheckedCount++;
-          }
+        excel.forEach((e) => {
+          if (e.ignored || !e.nameToks.length) return; // 배송비 등은 건너뜀
+          const cands = candidatesFor(e, cart, cartNorm, msg.match);
+          if (cands.length) cands.forEach((i) => toCheck.add(i));
+          else unmatchedExcel.push(e.label);
         });
 
-        const unmatchedExcel = excelNorms.map((e) => e.raw).filter((raw) => !matchedExcel.has(raw));
+        let checked = 0, uncheckedCount = 0;
+        cart.forEach((c, i) => {
+          if (toCheck.has(i)) { if (setChecked(c.checkbox, true)) checked++; }
+          else if (msg.uncheckRest) { if (setChecked(c.checkbox, false)) uncheckedCount++; }
+        });
+
         sendResponse({
           ok: true,
-          total: items.length,
+          total: cart.length,
           checked,
           uncheckedCount,
-          matchedNames,
           unmatchedExcel,
         });
         return;

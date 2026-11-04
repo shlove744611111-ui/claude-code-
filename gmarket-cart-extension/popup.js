@@ -1,6 +1,7 @@
 /* popup.js — 엑셀 파싱 + 콘텐츠 스크립트와 통신 */
 
-let items = []; // 엑셀에서 읽은 구입 물품명 배열
+let items = []; // [{name, spec}] — 엑셀에서 읽은 구입 물품
+let skippedCount = 0; // 배송비 등 제외한 개수
 
 const $ = (id) => document.getElementById(id);
 const fileEl = $("file");
@@ -13,35 +14,63 @@ const resultEl = $("result");
 
 function setStatus(msg) { statusEl.textContent = msg || ""; }
 
-/* 엑셀/CSV에서 상품명 열을 찾아 목록으로 만든다 */
+// 제외할 항목(배송비 등). 상품명에 이 단어가 들어가면 목록에서 뺀다.
+const IGNORE_WORDS = ["배송비", "택배비", "선불", "착불"];
+function isIgnored(name) {
+  const s = String(name).replace(/\s+/g, "");
+  return IGNORE_WORDS.some((w) => s.includes(w));
+}
+
+const NAME_HEADERS = /^(항목|품목|상품\s*명|물품|품명|상품|품\s*목|name|item|제품|물품명)$/i;
+const SPEC_HEADERS = /^(규격|사양|옵션|사이즈|size|spec|스펙|세부|비고)$/i;
+const QTY_HEADERS = /^(수량|개수|수\s*량|qty|q'?ty|count)$/i;
+
+/* 엑셀/CSV에서 '항목' 열과 '규격' 열을 찾아 물품 목록을 만든다.
+   - 제목 행이 위에 있어도, 헤더 행을 자동으로 찾는다.
+   - 헤더를 못 찾으면 첫 열을 상품명으로 가정한다. */
 function parseWorkbook(data) {
   const wb = XLSX.read(data, { type: "array" });
   const ws = wb.Sheets[wb.SheetNames[0]];
-  if (!ws) return [];
+  if (!ws) return { list: [], skipped: 0 };
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
-  if (!rows.length) return [];
+  if (!rows.length) return { list: [], skipped: 0 };
 
-  // 헤더 행에서 '상품명/품목/물품/name' 열을 찾는다
-  const headerRow = rows[0].map((c) => String(c).trim());
-  const nameKeywords = /(상품\s*명|품\s*목|물\s*품|품명|name|item)/i;
-  let nameCol = headerRow.findIndex((h) => nameKeywords.test(h));
-  let startRow = 0;
-  if (nameCol >= 0) {
-    startRow = 1; // 헤더가 있으니 다음 행부터
+  // 1) 헤더 행 찾기: 앞쪽 여러 행을 훑어 '항목/품목/상품명…' 셀이 있는 행
+  let headerIdx = -1, nameCol = -1, specCol = -1;
+  const scan = Math.min(rows.length, 15);
+  for (let r = 0; r < scan; r++) {
+    const cells = rows[r].map((c) => String(c).trim());
+    const nc = cells.findIndex((c) => NAME_HEADERS.test(c));
+    if (nc >= 0) {
+      headerIdx = r;
+      nameCol = nc;
+      specCol = cells.findIndex((c) => SPEC_HEADERS.test(c));
+      break;
+    }
+  }
+
+  let startRow;
+  if (headerIdx >= 0) {
+    startRow = headerIdx + 1;
   } else {
-    // 헤더가 없으면: 첫 행의 각 셀이 숫자가 아닌 글자를 담은 '가장 왼쪽' 열을 상품명 열로 가정
-    nameCol = 0;
-    const looksLikeHeaderOnlyNumbers = headerRow.every((c) => c === "" || /^\d+$/.test(c));
-    startRow = looksLikeHeaderOnlyNumbers ? 1 : 0;
+    // 헤더를 못 찾음: 첫 열을 상품명으로 가정하고, 숫자/제목만 있는 맨 윗행은 건너뜀
+    nameCol = 0; specCol = -1; startRow = 0;
+    // 첫 행이 전부 숫자가 아니고 글자 제목 같으면 1행부터
+    const first = rows[0].map((c) => String(c).trim());
+    if (first.filter(Boolean).length <= 1) startRow = 1;
   }
 
-  const out = [];
+  const list = [];
+  let skipped = 0;
   for (let r = startRow; r < rows.length; r++) {
-    const cell = rows[r][nameCol];
-    const name = (cell === undefined || cell === null) ? "" : String(cell).trim();
-    if (name) out.push(name);
+    const row = rows[r];
+    const name = String(row[nameCol] == null ? "" : row[nameCol]).trim();
+    if (!name) continue;
+    if (isIgnored(name)) { skipped++; continue; }
+    const spec = specCol >= 0 ? String(row[specCol] == null ? "" : row[specCol]).trim() : "";
+    list.push({ name, spec });
   }
-  return out;
+  return { list, skipped };
 }
 
 fileEl.addEventListener("change", async (e) => {
@@ -51,15 +80,20 @@ fileEl.addEventListener("change", async (e) => {
   try {
     setStatus("엑셀 읽는 중…");
     const buf = await f.arrayBuffer();
-    items = parseWorkbook(new Uint8Array(buf));
+    const parsed = parseWorkbook(new Uint8Array(buf));
+    items = parsed.list;
+    skippedCount = parsed.skipped;
     if (!items.length) {
-      fileInfo.textContent = "상품명을 찾지 못했습니다. 첫 번째 열에 품목명을 넣거나, 헤더에 '상품명' 열을 만들어 주세요.";
+      fileInfo.textContent = "상품명을 찾지 못했습니다. '항목'(또는 상품명) 열이 있는지 확인해 주세요.";
       itemListEl.hidden = true;
       runBtn.disabled = true;
     } else {
-      fileInfo.textContent = `${f.name} — 품목 ${items.length}개`;
+      fileInfo.textContent = `${f.name} — 물품 ${items.length}개` +
+        (skippedCount ? ` (배송비 등 ${skippedCount}개 제외)` : "");
       itemListEl.hidden = false;
-      itemListEl.innerHTML = items.map((n, i) => `<div>${i + 1}. ${escapeHtml(n)}</div>`).join("");
+      itemListEl.innerHTML = items.map((it, i) =>
+        `<div>${i + 1}. ${escapeHtml(it.name)}` +
+        (it.spec ? ` <span class="muted">[${escapeHtml(it.spec)}]</span>` : "") + `</div>`).join("");
       runBtn.disabled = false;
     }
     setStatus("");
@@ -74,8 +108,6 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
-/* 현재 탭이 지마켓인지 확인하고 콘텐츠 스크립트에 메시지를 보낸다.
-   content_scripts로 자동 주입되지만, 설치 전 열려 있던 탭 대비로 한 번 더 주입한다. */
 async function sendToTab(message) {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab || !tab.id) throw new Error("활성 탭을 찾을 수 없습니다.");
@@ -122,8 +154,9 @@ runBtn.addEventListener("click", async () => {
     resultEl.hidden = false;
     let html = `장바구니 상품 <b>${res.total}개</b> 중 <b>${res.checked}개</b> 체크` +
       (uncheckRest ? `, ${res.uncheckedCount}개 해제` : "") + `.`;
+    if (skippedCount) html += ` <span class="muted">(배송비 등 ${skippedCount}개는 처음부터 제외)</span>`;
     if (res.unmatchedExcel && res.unmatchedExcel.length) {
-      html += `<br><span class="warn">장바구니에서 못 찾은 엑셀 품목 ${res.unmatchedExcel.length}개:</span><ul>` +
+      html += `<br><span class="warn">장바구니에서 못 찾은 물품 ${res.unmatchedExcel.length}개:</span><ul>` +
         res.unmatchedExcel.map((n) => `<li>${escapeHtml(n)}</li>`).join("") + `</ul>`;
     }
     resultEl.innerHTML = html;
