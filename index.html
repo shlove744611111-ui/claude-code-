@@ -1049,53 +1049,68 @@ function hwpxPic(id,curW,curH,pxW,pxH,inst){
   const sx=(curW/orgW).toFixed(6),sy=(curH/orgH).toFixed(6);
   return `<hp:pic id="${inst}" zOrder="0" numberingType="PICTURE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" href="" groupLevel="0" instid="${inst}" reverse="0"><hp:offset x="0" y="0"/><hp:orgSz width="${orgW}" height="${orgH}"/><hp:curSz width="${curW}" height="${curH}"/><hp:flip horizontal="0" vertical="0"/><hp:rotationInfo angle="0" centerX="${Math.round(curW/2)}" centerY="${Math.round(curH/2)}" rotateimage="1"/><hp:renderingInfo><hc:transMatrix e1="1" e2="0" e3="0" e4="0" e5="1" e6="0"/><hc:scaMatrix e1="${sx}" e2="0" e3="0" e4="0" e5="${sy}" e6="0"/><hc:rotMatrix e1="1" e2="0" e3="0" e4="0" e5="1" e6="0"/></hp:renderingInfo><hp:imgRect><hc:pt0 x="0" y="0"/><hc:pt1 x="${orgW}" y="0"/><hc:pt2 x="${orgW}" y="${orgH}"/><hc:pt3 x="0" y="${orgH}"/></hp:imgRect><hp:imgClip left="0" right="${orgW}" top="0" bottom="${orgH}"/><hp:inMargin left="0" right="0" top="0" bottom="0"/><hp:imgDim dimwidth="${orgW}" dimheight="${orgH}"/><hc:img binaryItemIDRef="${id}" bright="0" contrast="0" effect="REAL_PIC" alpha="0"/><hp:effects/><hp:sz width="${curW}" widthRelTo="ABSOLUTE" height="${curH}" heightRelTo="ABSOLUTE" protect="0"/><hp:pos treatAsChar="1" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="COLUMN" vertAlign="TOP" horzAlign="CENTER" vertOffset="0" horzOffset="0"/><hp:outMargin left="0" right="0" top="0" bottom="0"/></hp:pic>`;
 }
-const hwpxTextP=(t,pp,cp,vs)=>`<hp:p id="${hpid()}" paraPrIDRef="${pp}" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="${cp}"><hp:t>${escapeHtml(t)}</hp:t></hp:run>${hwpxLineseg(vs)}</hp:p>`;
+const hwpxTextP=(t,pp,cp,vs,pb)=>`<hp:p id="${hpid()}" paraPrIDRef="${pp}" styleIDRef="0" pageBreak="${pb||'0'}" columnBreak="0" merged="0"><hp:run charPrIDRef="${cp}"><hp:t>${escapeHtml(t)}</hp:t></hp:run>${hwpxLineseg(vs)}</hp:p>`;
+/* 표 한 칸(hp:tc) */
+function hwpxTc(inner,col,row,w,h){
+  return `<hp:tc name="" header="0" hasMargin="0" protect="0" editable="0" dirty="0" borderFillIDRef="3"><hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="CENTER" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">${inner}</hp:subList><hp:cellAddr colAddr="${col}" rowAddr="${row}"/><hp:cellSpan colSpan="1" rowSpan="1"/><hp:cellSz width="${w}" height="${h}"/><hp:cellMargin left="141" right="141" top="141" bottom="141"/></hp:tc>`;
+}
 async function exportHWPX(){
   if(typeof fflate==="undefined"||!window.HWPX_TPL){toast("한글 생성 모듈을 불러오지 못했습니다");return;}
   const TPL=window.HWPX_TPL, dec=new TextDecoder();
   const name=projectName()||"공사 사진대지";
-  const L=computeLayout(), aspect=L.aspect;
-  let baseW=(aspect>=1?165:120)*(state.size/100);
-  const wmm=Math.max(60,Math.min(175,baseW)), hmm=wmm/aspect;
-  const pxW=Math.round(wmm*MM*3), pxH=Math.round(hmm*MM*3);
+  const L=computeLayout();
   const secPr=dec.decode(b64ToBytes(TPL.secPr)), secOpen=dec.decode(b64ToBytes(TPL.secOpen));
   const bin={}; let idx=1, inst=1700000000; const imgItems=[];
   HWPX_PID=0;
   // 제목(첫 문단 id=0, secPr+단 설정, 가운데 paraPr=21, 큰 글씨 charPr=7)
   let body=`<hp:p id="${hpid()}" paraPrIDRef="21" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="0">${secPr}<hp:ctrl><hp:colPr id="" type="NEWSPAPER" layout="LEFT" colCount="1" sameSz="1" sameGap="0"/></hp:ctrl></hp:run><hp:run charPrIDRef="0"></hp:run><hp:run charPrIDRef="7"><hp:t>${escapeHtml(name)}</hp:t></hp:run>${hwpxLineseg(2200)}</hp:p>`;
-  // 구역마다 표(table)에 사진을 넣는다. 열=한 줄 사진 수, 행=필요한 만큼, 각 칸=사진+설명
-  const TBLW=51024; // 표 전체 폭(HWPUNIT ≈180mm)
+  // 레이아웃대로: 한 페이지에 L.perPage장(= L.rows행 × cols열). 페이지마다 표 하나.
+  // 각 사진은 "사진 칸" + 바로 아래 "설명 칸" 2줄을 차지 → 표 테두리가 사진·설명 사이 선이 된다.
+  const cols=Math.max(1,state.perRow);
+  const CONTENT_W=186;                       // mm (A4 - 좌우 여백12)
+  const colW=HU(CONTENT_W/cols);             // 칸 너비(HWPUNIT)
+  const TBLW=colW*cols;                      // 표 전체 폭
+  const photoHmm=Math.max(28,Math.min(118,L.cellH)); // 사진 칸 높이(mm)
+  const capHmm=9;                            // 설명 칸 높이(mm)
+  const photoCellH=HU(photoHmm), capCellH=HU(capHmm);
+  const picWmm=(CONTENT_W/cols)-4, picHmm=photoHmm-2; // 사진(여백 제외)
+  const picW=HU(picWmm), picH=HU(picHmm);
+  const bpxW=Math.round(picWmm*MM*3), bpxH=Math.round(picHmm*MM*3);
+  const perPage=Math.max(1,L.perPage);
+  let firstTable=true;
   for(const st of STAGES){
     const arr=state.stages[st.key]; if(!arr.length) continue;
-    body+=hwpxTextP("■ "+st.ko, 11, 8, 1100);
-    const cols=state.perRow, rows=Math.ceil(arr.length/cols);
-    const cellW=Math.floor(TBLW/cols);
-    const picW=Math.max(2000,cellW-566), picH=Math.max(1500,Math.round(picW/aspect));
-    const capH=1200, cellH=picH+capH+600;
-    const picWmm=picW/283.465, picHmm=picH/283.465;
-    const bpxW=Math.round(picWmm*MM*3), bpxH=Math.round(picHmm*MM*3);
-    let trs="";
-    for(let r=0;r<rows;r++){
-      let tcs="";
-      for(let c=0;c<cols;c++){
-        const p=arr[r*cols+c]; let inner;
-        if(p){
-          const data=await renderCell(p,bpxW,bpxH);
-          const id="image"+idx; bin["BinData/"+id+".jpg"]=dataURLBytes(data);
-          imgItems.push(`<opf:item id="${id}" href="BinData/${id}.jpg" media-type="image/jpg" isEmbeded="1"/>`);
-          inner=`<hp:p id="${hpid()}" paraPrIDRef="23" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="1">${hwpxPic(id,picW,picH,bpxW,bpxH,inst++)}<hp:t></hp:t></hp:run>${hwpxLineseg(picH)}</hp:p>`
-            +`<hp:p id="${hpid()}" paraPrIDRef="23" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="0"><hp:t>${escapeHtml(p.desc||"")}</hp:t></hp:run>${hwpxLineseg(1000)}</hp:p>`;
-          idx++;
-        }else{
-          inner=`<hp:p id="${hpid()}" paraPrIDRef="23" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="0"><hp:t></hp:t></hp:run>${hwpxLineseg(1000)}</hp:p>`;
+    for(let start=0;start<arr.length;start+=perPage){
+      const slice=arr.slice(start,start+perPage);
+      const pbreak=firstTable?"0":"1"; // 첫 표만 그대로, 나머지는 새 페이지
+      body+=hwpxTextP("■ "+st.ko+(start>0?" (계속)":""), 11, 8, 1100, pbreak);
+      const photoRows=Math.ceil(slice.length/cols);
+      let trs="";
+      for(let r=0;r<photoRows;r++){
+        let ptcs="", ctcs="";
+        for(let c=0;c<cols;c++){
+          const p=slice[r*cols+c]; let pinner,cinner;
+          if(p){
+            const data=await renderCell(p,bpxW,bpxH);
+            const id="image"+idx; bin["BinData/"+id+".jpg"]=dataURLBytes(data);
+            imgItems.push(`<opf:item id="${id}" href="BinData/${id}.jpg" media-type="image/jpg" isEmbeded="1"/>`);
+            pinner=`<hp:p id="${hpid()}" paraPrIDRef="23" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="1">${hwpxPic(id,picW,picH,bpxW,bpxH,inst++)}<hp:t></hp:t></hp:run>${hwpxLineseg(picH)}</hp:p>`;
+            cinner=`<hp:p id="${hpid()}" paraPrIDRef="23" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="0"><hp:t>${escapeHtml(p.desc||"")}</hp:t></hp:run>${hwpxLineseg(1000)}</hp:p>`;
+            idx++;
+          }else{
+            pinner=`<hp:p id="${hpid()}" paraPrIDRef="23" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="0"><hp:t></hp:t></hp:run>${hwpxLineseg(1000)}</hp:p>`;
+            cinner=pinner;
+          }
+          ptcs+=hwpxTc(pinner,c,2*r,colW,photoCellH);
+          ctcs+=hwpxTc(cinner,c,2*r+1,colW,capCellH);
         }
-        tcs+=`<hp:tc name="" header="0" hasMargin="0" protect="0" editable="0" dirty="0" borderFillIDRef="3"><hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="CENTER" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">${inner}</hp:subList><hp:cellAddr colAddr="${c}" rowAddr="${r}"/><hp:cellSpan colSpan="1" rowSpan="1"/><hp:cellSz width="${cellW}" height="${cellH}"/><hp:cellMargin left="141" right="141" top="141" bottom="141"/></hp:tc>`;
+        trs+=`<hp:tr>${ptcs}</hp:tr><hp:tr>${ctcs}</hp:tr>`;
       }
-      trs+=`<hp:tr>${tcs}</hp:tr>`;
+      const rowCnt=photoRows*2, tblH=photoRows*(photoCellH+capCellH);
+      const tbl=`<hp:tbl id="${inst++}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="0" rowCnt="${rowCnt}" colCnt="${cols}" cellSpacing="0" borderFillIDRef="3" noAdjust="0"><hp:sz width="${TBLW}" widthRelTo="ABSOLUTE" height="${tblH}" heightRelTo="ABSOLUTE" protect="0"/><hp:pos treatAsChar="1" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="COLUMN" vertAlign="TOP" horzAlign="CENTER" vertOffset="0" horzOffset="0"/><hp:outMargin left="0" right="0" top="283" bottom="283"/><hp:inMargin left="141" right="141" top="141" bottom="141"/>${trs}</hp:tbl>`;
+      body+=`<hp:p id="${hpid()}" paraPrIDRef="21" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="0">${tbl}</hp:run>${hwpxLineseg(1000)}</hp:p>`;
+      firstTable=false;
     }
-    const tblH=rows*cellH;
-    const tbl=`<hp:tbl id="${inst++}" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="1" rowCnt="${rows}" colCnt="${cols}" cellSpacing="0" borderFillIDRef="3" noAdjust="0"><hp:sz width="${TBLW}" widthRelTo="ABSOLUTE" height="${tblH}" heightRelTo="ABSOLUTE" protect="0"/><hp:pos treatAsChar="1" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="COLUMN" vertAlign="TOP" horzAlign="CENTER" vertOffset="0" horzOffset="0"/><hp:outMargin left="0" right="0" top="283" bottom="283"/><hp:inMargin left="141" right="141" top="141" bottom="141"/>${trs}</hp:tbl>`;
-    body+=`<hp:p id="${hpid()}" paraPrIDRef="21" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="0">${tbl}</hp:run>${hwpxLineseg(1000)}</hp:p>`;
   }
   if(idx===1){toast("사진을 먼저 추가하세요");return;}
   const section=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n${secOpen}${body}</hs:sec>`;
