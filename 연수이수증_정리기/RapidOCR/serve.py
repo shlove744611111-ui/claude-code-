@@ -1,14 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-이수ON 로컬 실행기 (EasyOCR 내장, 완전 로컬)
-- 브라우저에 웹 화면을 열고, 스캔 PDF는 로컬 서버가 EasyOCR(한국어)로 인식합니다.
-- 모든 처리는 이 PC 안에서만. 외부 전송 없음. (엔진은 설치, 모델은 동봉)
+이수ON 로컬 실행기 (RapidOCR 한국어, 완전 로컬)
+- 브라우저에 웹 화면을 열고, 스캔 PDF는 로컬 서버가 RapidOCR(PP-OCR 한국어)로 인식합니다.
+- 모든 처리는 이 PC 안에서만. 외부 전송 없음. (모델은 설치 시 ./models 에 받아둠)
 - 브라우저를 닫으면 자동 종료됩니다.
 """
 import os
 import sys
 import time
-import json
 import threading
 import webbrowser
 import socketserver
@@ -28,47 +27,51 @@ STATE = {"last": None, "start": time.time()}
 IDLE_TIMEOUT = 30
 OPEN_TIMEOUT = 120
 
-_reader = None
-_reader_lock = threading.Lock()
+_engine = None
+_lock = threading.Lock()
 
 
-def get_reader():
-    global _reader
-    with _reader_lock:
-        if _reader is None:
-            import easyocr
-            has_models = os.path.exists(os.path.join(MODELS, "korean_g2.pth"))
-            _reader = easyocr.Reader(
-                ["ko"], gpu=False,
-                model_storage_directory=MODELS,
-                download_enabled=not has_models,  # 동봉 모델 있으면 오프라인, 없으면 최초 1회 다운로드
-            )
-        return _reader
+def get_engine():
+    global _engine
+    with _lock:
+        if _engine is None:
+            from rapidocr import RapidOCR
+            os.makedirs(MODELS, exist_ok=True)
+            _engine = RapidOCR(params={
+                "Global.use_cls": False,
+                "Global.model_root_dir": MODELS,
+                "Det.lang_type": "ch",
+                "Rec.lang_type": "korean",
+                "Rec.ocr_version": "PP-OCRv4",
+            })
+        return _engine
 
 
 def run_ocr(pdf_bytes):
     import numpy as np
     import pypdfium2 as pdfium
-    reader = get_reader()
+    eng = get_engine()
     pdf = pdfium.PdfDocument(pdf_bytes)
     out = []
     try:
         for i in range(len(pdf)):
             pil = pdf[i].render(scale=3.0).to_pil().convert("RGB")
-            results = reader.readtext(np.array(pil), detail=1, paragraph=False)
+            res = eng(np.array(pil))
+            if not res or res.boxes is None:
+                continue
             items = []
-            for box, text, conf in results:
+            for box, txt in zip(res.boxes, res.txts):
                 ys = [p[1] for p in box]
                 xs = [p[0] for p in box]
-                items.append((sum(ys) / 4.0, min(xs), text))
+                items.append((sum(ys) / 4.0, min(xs), txt))
             items.sort(key=lambda t: t[0])
-            lines, cur, last_y = [], [], None
-            for y, x, text in items:
-                if last_y is not None and abs(y - last_y) > 24:
+            lines, cur, last = [], [], None
+            for y, x, t in items:
+                if last is not None and abs(y - last) > 24:
                     lines.append(cur)
                     cur = []
-                cur.append((x, text))
-                last_y = y
+                cur.append((x, t))
+                last = y
             if cur:
                 lines.append(cur)
             for ln in lines:
@@ -121,8 +124,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             try:
                 n = int(self.headers.get("Content-Length", "0"))
                 data = self.rfile.read(n)
-                txt = run_ocr(data)
-                self._text(200, txt)
+                self._text(200, run_ocr(data))
             except Exception as e:  # noqa
                 self._text(500, "OCR오류: " + str(e))
             return
@@ -151,8 +153,7 @@ def main():
     port = httpd.server_address[1]
     url = "http://127.0.0.1:%d/index.html" % port
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
-    # EasyOCR 모델을 미리 로드(첫 OCR 지연 완화)
-    threading.Thread(target=lambda: (get_reader(),), daemon=True).start()
+    threading.Thread(target=lambda: (get_engine(),), daemon=True).start()
     try:
         webbrowser.open(url)
     except Exception:  # noqa
