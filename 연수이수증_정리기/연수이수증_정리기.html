@@ -90,6 +90,11 @@
   th{background:var(--surface-2);font-weight:700;font-size:.78rem;color:var(--muted);letter-spacing:.02em;position:sticky;top:0;z-index:1;}
   td.idx{color:var(--muted);font-variant-numeric:tabular-nums;width:38px;}
   td.data{font-family:var(--mono);white-space:normal;max-width:240px;}
+  th.col{cursor:grab;user-select:none;}
+  th.col.dragging{opacity:.45;}
+  th.col.dragover{box-shadow:inset 3px 0 0 var(--accent);}
+  th.col .lbl{display:inline-block;}
+  th.col .lbl[contenteditable]{outline:2px solid var(--accent);border-radius:4px;padding:0 3px;cursor:text;}
   td[contenteditable]:focus{outline:2px solid var(--accent);outline-offset:-2px;border-radius:4px;background:var(--accent-weak);}
   tr.warn td{background:var(--warn-bg);}
   tr.example td{opacity:.72;}
@@ -315,6 +320,9 @@
   var WIDTH={number:24,course:40,name:10,rank:16,org:40,hours:14,date:12,issuer:24};
   var selected={number:false,course:true,name:true,rank:true,org:true,hours:true,date:true,issuer:true};
   var bundleOn=false, keywords=[], issuerDefault='';
+  var order=COLS.map(function(c){return c.key;});
+  var labels={}; COLS.forEach(function(c){labels[c.key]=c.label;});
+  var dragKey=null;
   var rows=[];
 
   var EXAMPLE={example:true,file:'예시_이수증.pdf',
@@ -344,7 +352,7 @@
   function rowNote(row){
     if(row.textFailed)return '텍스트 추출 실패 (스캔본일 수 있음)';
     var miss=[];
-    COLS.forEach(function(c){if(selected[c.key]&&!getVal(row,c.key))miss.push(c.label);});
+    order.forEach(function(k){if(selected[k]&&!getVal(row,k))miss.push(labels[k]);});
     return miss.length?('검토필요: '+miss.join(', ')+' 미검출'):'';
   }
 
@@ -353,9 +361,38 @@
   function escapeHtml(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
   function renderHead(){
     var h='<th class="idx">#</th>';
-    COLS.forEach(function(c){if(selected[c.key])h+='<th>'+c.label+'</th>';});
+    order.forEach(function(k){ if(!selected[k])return;
+      h+='<th class="col" draggable="true" data-key="'+k+'" title="더블클릭: 이름 수정 · 드래그: 순서 이동"><span class="lbl">'+escapeHtml(labels[k])+'</span></th>';
+    });
     h+='<th>비고</th><th></th>';
     headRow.innerHTML=h;
+    bindHeader();
+  }
+  function moveColumn(from,to){
+    if(!from||from===to)return;
+    var fi=order.indexOf(from); if(fi<0)return;
+    order.splice(fi,1);
+    var ti=order.indexOf(to); if(ti<0){order.push(from);}else{order.splice(ti,0,from);}
+    render();
+  }
+  function bindHeader(){
+    Array.prototype.forEach.call(headRow.querySelectorAll('th.col'),function(th){
+      var span=th.querySelector('.lbl'),key=th.getAttribute('data-key');
+      th.addEventListener('dblclick',function(){
+        th.setAttribute('draggable','false');span.setAttribute('contenteditable','true');span.focus();
+        var rg=document.createRange();rg.selectNodeContents(span);var sel=window.getSelection();sel.removeAllRanges();sel.addRange(rg);
+      });
+      span.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();span.blur();}});
+      span.addEventListener('blur',function(){
+        span.removeAttribute('contenteditable');th.setAttribute('draggable','true');
+        var v=span.textContent.trim();if(v)labels[key]=v;renderHead();
+      });
+      th.addEventListener('dragstart',function(e){if(span.getAttribute('contenteditable')){e.preventDefault();return;}dragKey=key;e.dataTransfer.effectAllowed='move';th.classList.add('dragging');});
+      th.addEventListener('dragend',function(){dragKey=null;Array.prototype.forEach.call(headRow.querySelectorAll('th.col'),function(x){x.classList.remove('dragging','dragover');});});
+      th.addEventListener('dragover',function(e){if(!dragKey)return;e.preventDefault();e.dataTransfer.dropEffect='move';th.classList.add('dragover');});
+      th.addEventListener('dragleave',function(){th.classList.remove('dragover');});
+      th.addEventListener('drop',function(e){e.preventDefault();th.classList.remove('dragover');moveColumn(dragKey,key);});
+    });
   }
   function render(){
     renderHead();
@@ -366,9 +403,8 @@
       var tr=document.createElement('tr');
       tr.className=(r.example?'example':'')+(note?' warn':'');
       var html='<td class="idx">'+(i+1)+'</td>';
-      COLS.forEach(function(c){if(!selected[c.key])return;
-        var editable=r.example?'':' contenteditable="true"';
-        html+='<td class="data" data-k="'+c.key+'"'+editable+'>'+escapeHtml(getVal(r,c.key))+'</td>';
+      order.forEach(function(k){if(!selected[k])return;
+        html+='<td class="data" data-k="'+k+'" contenteditable="true">'+escapeHtml(getVal(r,k))+'</td>';
       });
       html+='<td class="note '+(note?'bad':'ok')+'">'+(r.example?'<span class="badge">예시</span>':(note?escapeHtml(note):'정상'))+'</td>';
       html+='<td>'+(r.example?'':'<button class="del" data-i="'+i+'" title="삭제">✕</button>')+'</td>';
@@ -415,20 +451,20 @@
 
   // ===== 엑셀 파일 저장 (.xlsx) =====
   function buildRows(){
-    var cols=COLS.filter(function(c){return selected[c.key];});
-    var head=['번호'].concat(cols.map(function(c){return c.label;})).concat(['비고']);
+    var keys=order.filter(function(k){return selected[k];});
+    var head=['번호'].concat(keys.map(function(k){return labels[k];})).concat(['비고']);
     var aoa=[head];
     rows.forEach(function(r,i){
-      aoa.push([i+1].concat(cols.map(function(c){return getVal(r,c.key);})).concat([rowNote(r)]));
+      aoa.push([i+1].concat(keys.map(function(k){return getVal(r,k);})).concat([rowNote(r)]));
     });
-    return {aoa:aoa,cols:cols};
+    return {aoa:aoa,keys:keys};
   }
   function saveXlsx(){
     if(!rows.length){toast('먼저 PDF를 추가하세요');return;}
     if(!window.XLSX){toast('엑셀 라이브러리를 불러오지 못했습니다(인터넷 확인).');return;}
     var b=buildRows();
     var ws=XLSX.utils.aoa_to_sheet(b.aoa);
-    ws['!cols']=[{wch:6}].concat(b.cols.map(function(c){return {wch:WIDTH[c.key]||16};})).concat([{wch:30}]);
+    ws['!cols']=[{wch:6}].concat(b.keys.map(function(k){return {wch:WIDTH[k]||16};})).concat([{wch:30}]);
     var wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,ws,'연수이수증');
     var d=new Date(),stamp=d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
