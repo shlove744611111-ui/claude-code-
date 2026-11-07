@@ -293,18 +293,21 @@
   function rankFallback(text){var LN=text.split('\n');for(var i=0;i<LN.length;i++){if(RANK_KW.test(LN[i])){var m=/[가-힣]{3,}/.exec(LN[i].replace(/^\s*(직\s*)?급\s*[:：]?\s*/,''));if(m)return m[0];}}return '';}
   function hoursFallback(text){var m=/(\d{1,3}\s*시간\s*(?:\([^\)]*\))?)/.exec(text);return m?m[1].replace(/\s+/g,' ').trim():'';}
   function orgFallback(text){var LN=text.split('\n');for(var i=0;i<LN.length;i++){if(LN[i].indexOf('학교')>=0){var cur=LN[i];if(i>0&&/(교육청|지원청|도교육|교육지원)/.test(LN[i-1]))cur=LN[i-1]+cur;return cur.replace(/\s+/g,'').trim();}}return '';}
+  function courseFallback(text){var LN=text.split('\n');for(var i=0;i<LN.length;i++){var m=/정\s*명\s*[:：]\s*(.+)/.exec(LN[i]);if(m&&m[1].trim())return m[1].trim();}return '';}
   function parsePdfText(text){
     var name=extractName(findLabelValue(text,L.name,false)||findValue(text,L.name));
     var rank=findLabelValue(text,L.rank,false);
     var org=findLabelValue(text,L.org,true);
     var hours=findLabelValue(text,L.hours,false);
+    var course=findLabelValue(text,L.course,true);
+    if(!course)course=courseFallback(text);
     if(!name)name=nameFallback(text);
     if(!rank)rank=rankFallback(text);
     if(!org)org=orgFallback(text);
     if(!hours)hours=hoursFallback(text);
     return {
       number:extractNumberFull(text),
-      course:findLabelValue(text,L.course,true),
+      course:course,
       name:name,rank:rank,org:org,hours:hours,
       date:extractDateFull(text),
       issuer:extractIssuer(text)
