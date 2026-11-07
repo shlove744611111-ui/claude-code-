@@ -472,13 +472,22 @@
     var cv=document.createElement('canvas');cv.width=Math.ceil(vp.width);cv.height=Math.ceil(vp.height);
     return page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise.then(function(){return cv;});
   }
+  function preprocess(cv){
+    // 그레이스케일만 (이진화는 오인식을 늘려 사용하지 않음)
+    try{
+      var ctx=cv.getContext('2d'),im=ctx.getImageData(0,0,cv.width,cv.height),d=im.data,i,g;
+      for(i=0;i<d.length;i+=4){g=(d[i]*0.299+d[i+1]*0.587+d[i+2]*0.114)|0;d[i]=d[i+1]=d[i+2]=g;}
+      ctx.putImageData(im,0,0);
+    }catch(e){}
+    return cv;
+  }
   function ocrExtract(buf,onprog){
     return loadTesseract().then(function(){
       return pdfjsLib.getDocument({data:buf}).promise.then(function(pdf){
         return Tesseract.createWorker('kor',1).then(function(worker){
           var out=[],chain=Promise.resolve();
           for(var p=1;p<=pdf.numPages;p++){(function(pn){
-            chain=chain.then(function(){return pdf.getPage(pn).then(function(page){return renderCanvas(page,2).then(function(cv){return worker.recognize(cv).then(function(res){out.push((res&&res.data&&res.data.text)||'');if(onprog)onprog(pn,pdf.numPages);});});});});
+            chain=chain.then(function(){return pdf.getPage(pn).then(function(page){return renderCanvas(page,4).then(function(cv){preprocess(cv);return worker.recognize(cv).then(function(res){out.push((res&&res.data&&res.data.text)||'');if(onprog)onprog(pn,pdf.numPages);});});});});
           })(p);}
           return chain.then(function(){return worker.terminate().then(function(){return out.join('\n');});});
         });
@@ -575,7 +584,6 @@
   folderInput.addEventListener('change',function(){handleFiles(folderInput.files);folderInput.value='';});
   document.getElementById('pickFiles').addEventListener('click',function(e){e.stopPropagation();input.click();});
   document.getElementById('pickFolder').addEventListener('click',function(e){e.stopPropagation();folderInput.click();});
-  drop.addEventListener('click',function(e){if(e.target.closest('button'))return;input.click();});
   ['dragenter','dragover'].forEach(function(ev){drop.addEventListener(ev,function(e){e.preventDefault();drop.classList.add('over');});});
   ['dragleave','drop'].forEach(function(ev){drop.addEventListener(ev,function(e){e.preventDefault();drop.classList.remove('over');});});
   drop.addEventListener('drop',function(e){if(e.dataTransfer&&e.dataTransfer.files)handleFiles(e.dataTransfer.files);});
