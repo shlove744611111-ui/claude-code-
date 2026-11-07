@@ -289,14 +289,25 @@
     }
     return '';
   }
+  // 라벨이 깨진 OCR 대비: 값의 내용/위치로 보강 추출
+  var RANK_KW=/(주사보|주무관|사무관|서기관|주사|교사|교감|교장|장학사|장학관|연구사|연구관|교육연구|행정주사|행정서기)/;
+  function nameFallback(text){var LN=text.split('\n');for(var i=0;i<LN.length;i++){var m=/명\s*[:：]\s*([가-힣]{2,4})\s*[)\]]?\s*$/.exec(LN[i]);if(m)return m[1];}return '';}
+  function rankFallback(text){var LN=text.split('\n');for(var i=0;i<LN.length;i++){if(RANK_KW.test(LN[i])){var m=/[가-힣]{3,}/.exec(LN[i].replace(/^\s*(직\s*)?급\s*[:：]?\s*/,''));if(m)return m[0];}}return '';}
+  function hoursFallback(text){var m=/(\d{1,3}\s*시간\s*(?:\([^\)]*\))?)/.exec(text);return m?m[1].replace(/\s+/g,' ').trim():'';}
+  function orgFallback(text){var LN=text.split('\n');for(var i=0;i<LN.length;i++){if(LN[i].indexOf('학교')>=0){var cur=LN[i];if(i>0&&/(교육청|지원청|도교육|교육지원)/.test(LN[i-1]))cur=LN[i-1]+cur;return cur.replace(/\s+/g,'').trim();}}return '';}
   function parsePdfText(text){
+    var name=extractName(findLabelValue(text,L.name,false)||findValue(text,L.name));
+    var rank=findLabelValue(text,L.rank,false);
+    var org=findLabelValue(text,L.org,true);
+    var hours=findLabelValue(text,L.hours,false);
+    if(!name)name=nameFallback(text);
+    if(!rank)rank=rankFallback(text);
+    if(!org)org=orgFallback(text);
+    if(!hours)hours=hoursFallback(text);
     return {
       number:extractNumberFull(text),
       course:findLabelValue(text,L.course,true),
-      name:extractName(findLabelValue(text,L.name,false)||findValue(text,L.name)),
-      rank:findLabelValue(text,L.rank,false),
-      org:findLabelValue(text,L.org,true),
-      hours:findLabelValue(text,L.hours,false),
+      name:name,rank:rank,org:org,hours:hours,
       date:extractDateFull(text),
       issuer:extractIssuer(text)
     };
@@ -545,6 +556,16 @@
       });
     });
   }
+  // 로컬 서버에 EasyOCR이 있으면 그걸로 처리(정확), 없으면 브라우저 OCR로 대체
+  function ocrServer(file){
+    return fetch('ocr',{method:'POST',body:file}).then(function(r){
+      if(!r.ok)throw new Error('ocr '+r.status);
+      return r.text();
+    }).then(function(t){ if(/^OCR오류/.test(t))throw new Error(t); if(!t||!t.trim())throw new Error('empty'); return t; });
+  }
+  function ocrAny(file,buf,onprog){
+    return ocrServer(file).catch(function(){ return ocrExtract(buf,onprog); });
+  }
   function blankRow(name){return {file:name,text:'',number:'',course:'',name:'',rank:'',org:'',hours:'',date:'',issuer:''};}
   function pushParsed(file,text,isOcr){
     var r=parsePdfText(text);r.file=file.name;r.text=text;r.textNorm=text.replace(/\s+/g,'');
@@ -563,7 +584,7 @@
         if(!text.trim()&&ocrOn){
           countEl.innerHTML='<span class="spin"></span> OCR 처리 중... '+file.name;
           return file.arrayBuffer().then(function(buf2){
-            return ocrExtract(buf2,function(pn,tot){countEl.innerHTML='<span class="spin"></span> OCR '+file.name+' ('+pn+'/'+tot+'쪽)';})
+            return ocrAny(file,buf2,function(pn,tot){countEl.innerHTML='<span class="spin"></span> OCR '+file.name+' ('+pn+'/'+tot+'쪽)';})
               .then(function(ot){pushParsed(file,ot,true);})
               .catch(function(e){var r=blankRow(file.name);r.textFailed=true;r.errMsg='OCR: '+((e&&e.message)||e);rows.push(r);render();});
           });
