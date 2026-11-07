@@ -11,9 +11,9 @@ echo   인터넷으로 아무것도 전송하지 않습니다.
 echo ==========================================================
 echo.
 
-echo [1/3] 필요한 도구를 설치합니다... (pdfplumber, openpyxl, pyinstaller)
+echo [1/3] 필요한 도구를 설치합니다... (pdfplumber, openpyxl, OCR, pyinstaller)
 python -m pip install --disable-pip-version-check -q --upgrade pip
-python -m pip install --disable-pip-version-check -q pdfplumber openpyxl pyinstaller
+python -m pip install --disable-pip-version-check -q pdfplumber openpyxl pypdfium2 pillow pytesseract pyinstaller
 if errorlevel 1 (
   echo.
   echo [오류] 설치 실패. 인터넷 연결 또는 Python 설치를 확인하세요.
@@ -26,6 +26,8 @@ pyinstaller --noconfirm --onefile --windowed ^
   --name 이수ON ^
   --collect-all pdfminer ^
   --collect-all pdfplumber ^
+  --collect-all pypdfium2 ^
+  --add-data "tessdata;tessdata" ^
   cert_organizer.py
 if errorlevel 1 (
   echo.
