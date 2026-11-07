@@ -481,13 +481,43 @@
     }catch(e){}
     return cv;
   }
+  function detectSkew(cv){
+    try{
+      var sc=Math.min(1,900/cv.width),w=Math.round(cv.width*sc),h=Math.round(cv.height*sc);
+      var t=document.createElement('canvas');t.width=w;t.height=h;t.getContext('2d').drawImage(cv,0,0,w,h);
+      var im=t.getContext('2d').getImageData(0,0,w,h).data,gr=new Uint8Array(w*h),hist=new Array(256),i;
+      for(i=0;i<256;i++)hist[i]=0;
+      for(i=0;i<w*h;i++){var p=i*4,g=(im[p]*0.299+im[p+1]*0.587+im[p+2]*0.114)|0;gr[i]=g;hist[g]++;}
+      var tot=w*h,sum=0;for(i=0;i<256;i++)sum+=i*hist[i];var sB=0,wB=0,mx=0,th=128,wF,mB,mF,bt;
+      for(i=0;i<256;i++){wB+=hist[i];if(!wB)continue;wF=tot-wB;if(!wF)break;sB+=i*hist[i];mB=sB/wB;mF=(sum-sB)/wF;bt=wB*wF*(mB-mF)*(mB-mF);if(bt>mx){mx=bt;th=i;}}
+      var xs=[],ys=[],cx=w/2,cy=h/2,x,y;
+      for(y=0;y<h;y++)for(x=0;x<w;x++)if(gr[y*w+x]<th){xs.push(x-cx);ys.push(y-cy);}
+      var n=xs.length;if(n<80)return 0;var best=0,bs=-1,deg;
+      for(deg=-12;deg<=12.0001;deg+=0.3){var r=deg*Math.PI/180,c=Math.cos(r),s=Math.sin(r),acc={},k,scr=0;
+        for(i=0;i<n;i++){var yp=Math.round(ys[i]*c-xs[i]*s);acc[yp]=(acc[yp]||0)+1;}
+        for(k in acc)scr+=acc[k]*acc[k];
+        if(scr>bs){bs=scr;best=deg;}}
+      return best;
+    }catch(e){return 0;}
+  }
+  function deskew(cv){
+    // 기울기가 큰 경우(>3.5도)만 자동 회전 보정 (작은 기울기는 보간 흐림이 손해)
+    var a=detectSkew(cv);
+    if(Math.abs(a)>3.5){
+      var o=document.createElement('canvas');o.width=cv.width;o.height=cv.height;var c=o.getContext('2d');
+      c.fillStyle='#fff';c.fillRect(0,0,o.width,o.height);c.imageSmoothingEnabled=true;c.imageSmoothingQuality='high';
+      c.translate(o.width/2,o.height/2);c.rotate(-a*Math.PI/180);c.drawImage(cv,-cv.width/2,-cv.height/2);
+      return o;
+    }
+    return cv;
+  }
   function ocrExtract(buf,onprog){
     return loadTesseract().then(function(){
       return pdfjsLib.getDocument({data:buf}).promise.then(function(pdf){
         return Tesseract.createWorker('kor',1).then(function(worker){
           var out=[],chain=Promise.resolve();
           for(var p=1;p<=pdf.numPages;p++){(function(pn){
-            chain=chain.then(function(){return pdf.getPage(pn).then(function(page){return renderCanvas(page,4).then(function(cv){preprocess(cv);return worker.recognize(cv).then(function(res){out.push((res&&res.data&&res.data.text)||'');if(onprog)onprog(pn,pdf.numPages);});});});});
+            chain=chain.then(function(){return pdf.getPage(pn).then(function(page){return renderCanvas(page,4).then(function(cv){preprocess(cv);cv=deskew(cv);return worker.recognize(cv).then(function(res){out.push((res&&res.data&&res.data.text)||'');if(onprog)onprog(pn,pdf.numPages);});});});});
           })(p);}
           return chain.then(function(){return worker.terminate().then(function(){return out.join('\n');});});
         });
