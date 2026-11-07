@@ -168,8 +168,14 @@
     <div class="kwhint"><b>이수번호 앞부분</b>(예: <code>경남교연</code>)으로 이수기관을 자동 추정합니다. 발급기관장이 도장·이미지라 못 읽어도 번호로 채워집니다. 위 칸에 값을 넣으면 그 값이 우선됩니다(자동 추정 무시). ※ 경남 외 기관명은 자동 생성값이니 확인해 주세요.</div>
   </div>
 
+  <div class="panel">
+    <div class="ptitle">스캔본 OCR (이미지 PDF)</div>
+    <label class="chip on" id="ocrChip"><input type="checkbox" id="ocrToggle" checked><span>텍스트 없는 PDF 자동 OCR</span></label>
+    <div class="kwhint">글자를 복사할 수 없는 <b>스캔(이미지) PDF</b>는 OCR로 글자를 읽어 정리합니다. <b>OCR 엔진을 인터넷에서 불러오므로 인터넷 연결이 필요</b>하고, 파일당 수십 초 걸릴 수 있어요. (PDF는 여전히 브라우저 안에서만 처리됩니다.)</div>
+  </div>
+
   <div class="bar">
-    <span class="count" id="count">아직 추가된 파일이 없습니다 (아래는 예시입니다)</span>
+    <span class="count" id="count">아직 추가된 파일이 없습니다. 위에서 PDF 또는 폴더를 선택하세요.</span>
     <button id="saveXlsxBtn" class="primary">엑셀 파일로 저장 (.xlsx)</button>
     <button id="copyBtn">표 복사</button>
     <button id="clearBtn">모두 지우기</button>
@@ -330,7 +336,7 @@
   ];
   var WIDTH={number:24,course:40,name:10,rank:16,org:40,hours:14,date:12,issuer:24};
   var selected={number:false,course:true,name:true,rank:true,org:true,hours:true,date:true,issuer:true};
-  var bundleOn=false, keywords=[], issuerDefault='';
+  var bundleOn=false, keywords=[], issuerDefault='', ocrOn=true;
   var order=COLS.map(function(c){return c.key;});
   var labels={}; COLS.forEach(function(c){labels[c.key]=c.label;});
   var dragKey=null;
@@ -445,12 +451,46 @@
     });
   }
   function updateCount(){
-    if(!rows.length){countEl.textContent='아직 추가된 파일이 없습니다 (아래는 예시입니다)';return;}
+    if(!rows.length){countEl.textContent='아직 추가된 파일이 없습니다. 위에서 PDF 또는 폴더를 선택하세요.';return;}
     var warn=0;rows.forEach(function(r){if(rowNote(r))warn++;});
     countEl.textContent='총 '+rows.length+'건'+(warn?(' · 검토 필요 '+warn+'건'):' · 모두 정상');
   }
 
   // ===== 파일 처리 =====
+  // ===== OCR (스캔 PDF용, 필요할 때만 인터넷에서 로드) =====
+  var OCR_SRC='https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+  function loadTesseract(){
+    return new Promise(function(res,rej){
+      if(window.Tesseract)return res();
+      var s=document.createElement('script');s.src=OCR_SRC;
+      s.onload=function(){res();};s.onerror=function(){rej(new Error('OCR 엔진 로드 실패 (인터넷 연결 확인)'));};
+      document.head.appendChild(s);
+    });
+  }
+  function renderCanvas(page,scale){
+    var vp=page.getViewport({scale:scale});
+    var cv=document.createElement('canvas');cv.width=Math.ceil(vp.width);cv.height=Math.ceil(vp.height);
+    return page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise.then(function(){return cv;});
+  }
+  function ocrExtract(buf,onprog){
+    return loadTesseract().then(function(){
+      return pdfjsLib.getDocument({data:buf}).promise.then(function(pdf){
+        return Tesseract.createWorker('kor',1).then(function(worker){
+          var out=[],chain=Promise.resolve();
+          for(var p=1;p<=pdf.numPages;p++){(function(pn){
+            chain=chain.then(function(){return pdf.getPage(pn).then(function(page){return renderCanvas(page,2).then(function(cv){return worker.recognize(cv).then(function(res){out.push((res&&res.data&&res.data.text)||'');if(onprog)onprog(pn,pdf.numPages);});});});});
+          })(p);}
+          return chain.then(function(){return worker.terminate().then(function(){return out.join('\n');});});
+        });
+      });
+    });
+  }
+  function blankRow(name){return {file:name,text:'',number:'',course:'',name:'',rank:'',org:'',hours:'',date:'',issuer:''};}
+  function pushParsed(file,text,isOcr){
+    var r=parsePdfText(text);r.file=file.name;r.text=text;r.textNorm=text.replace(/\s+/g,'');
+    if(!text.trim())r.textFailed=true; else if(isOcr)r.ocr=true;
+    rows.push(r);render();
+  }
   var busy=false;
   function handleFiles(files){
     if(busy||!files||!files.length)return;
@@ -460,9 +500,17 @@
     busy=true;countEl.innerHTML='<span class="spin"></span> 읽는 중...';
     arr.reduce(function(chain,file){return chain.then(function(){
       return file.arrayBuffer().then(function(buf){return extractText(buf).then(function(text){
-        var r=parsePdfText(text);r.file=file.name;r.text=text;r.textNorm=text.replace(/\s+/g,'');if(!text.trim())r.textFailed=true;rows.push(r);render();
+        if(!text.trim()&&ocrOn){
+          countEl.innerHTML='<span class="spin"></span> OCR 처리 중... '+file.name;
+          return file.arrayBuffer().then(function(buf2){
+            return ocrExtract(buf2,function(pn,tot){countEl.innerHTML='<span class="spin"></span> OCR '+file.name+' ('+pn+'/'+tot+'쪽)';})
+              .then(function(ot){pushParsed(file,ot,true);})
+              .catch(function(e){var r=blankRow(file.name);r.textFailed=true;r.errMsg='OCR: '+((e&&e.message)||e);rows.push(r);render();});
+          });
+        }
+        pushParsed(file,text,false);
       });}).catch(function(e){
-        rows.push({file:file.name,text:'',number:'',course:'',name:'',rank:'',org:'',hours:'',date:'',issuer:'',textFailed:true,errMsg:(e&&e.message)||String(e)});render();
+        var r=blankRow(file.name);r.textFailed=true;r.errMsg=(e&&e.message)||String(e);rows.push(r);render();
       });
     });},Promise.resolve()).then(function(){busy=false;render();toast(arr.length+'개 파일 처리 완료');});
   }
@@ -519,6 +567,8 @@
   kwInput.addEventListener('input',function(){parseKw();render();});
   var issInput=document.getElementById('issInput');
   issInput.addEventListener('input',function(){issuerDefault=issInput.value.trim();render();});
+  var ocrToggle=document.getElementById('ocrToggle'),ocrChip=document.getElementById('ocrChip');
+  ocrToggle.addEventListener('change',function(){ocrOn=ocrToggle.checked;ocrChip.classList.toggle('on',ocrOn);});
 
   var drop=document.getElementById('drop'),input=document.getElementById('fileInput'),folderInput=document.getElementById('folderInput');
   input.addEventListener('change',function(){handleFiles(input.files);input.value='';});
