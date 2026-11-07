@@ -77,6 +77,8 @@
 
   .bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:18px 0 10px;}
   .bar .count{color:var(--muted);font-size:.88rem;margin-right:auto;}
+  .tablehint{margin:0 0 8px;font-size:.82rem;color:var(--muted);}
+  .tablehint b{color:var(--fg);}
   button{font-family:var(--font);font-size:.88rem;font-weight:500;cursor:pointer;border-radius:9px;
     padding:9px 14px;border:1px solid var(--line);background:var(--surface);color:var(--fg);transition:.15s;}
   button:hover{border-color:var(--accent);}
@@ -171,6 +173,8 @@
     <button id="copyBtn">표 복사</button>
     <button id="clearBtn">모두 지우기</button>
   </div>
+
+  <p class="tablehint">💡 표 맨 위 <b>항목 이름</b>을 <b>더블클릭</b>하면 이름 수정, <b>드래그</b>하면 좌우 순서 이동이 됩니다.</p>
 
   <div class="tablecard">
     <div class="tablescroll"><table>
