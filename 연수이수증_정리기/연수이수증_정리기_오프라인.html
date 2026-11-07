@@ -556,13 +556,29 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     }
     return cv;
   }
+  function scoreText(t){
+    var n=(t||'').replace(/\s+/g,''),labs=['과정명','성명','직급','근무기관','이수시간','이수일자','이수기관'],c=0,i;
+    for(i=0;i<labs.length;i++)if(n.indexOf(labs[i])>=0)c++;
+    if(/(\d{4})\s*[.\-/년]/.test(t))c+=0.5;
+    return c;
+  }
+  function recognizeBest(worker,page){
+    // 배율 4, 5 두 번 인식 후 더 잘 잡힌 결과 선택(저해상도=4, 고해상도=5 자동 적응)
+    return renderCanvas(page,4).then(function(a){a=deskew(a);return worker.recognize(a).then(function(r4){
+      return renderCanvas(page,5).then(function(b){b=deskew(b);return worker.recognize(b).then(function(r5){
+        var t4=(r4&&r4.data&&r4.data.text)||'',t5=(r5&&r5.data&&r5.data.text)||'';
+        var best=scoreText(t5)>scoreText(t4)?t5:t4;
+        return best.replace(/([가-힣]) (?=[가-힣])/g,'$1');
+      });});
+    });});
+  }
   function ocrExtract(buf,onprog){
     return loadTesseract().then(function(){
       return pdfjsLib.getDocument({data:buf}).promise.then(function(pdf){
         return Tesseract.createWorker('kor',1).then(function(worker){
           var out=[],chain=Promise.resolve();
           for(var p=1;p<=pdf.numPages;p++){(function(pn){
-            chain=chain.then(function(){return pdf.getPage(pn).then(function(page){return renderCanvas(page,4).then(function(cv){preprocess(cv);cv=deskew(cv);return worker.recognize(cv).then(function(res){out.push((res&&res.data&&res.data.text)||'');if(onprog)onprog(pn,pdf.numPages);});});});});
+            chain=chain.then(function(){return pdf.getPage(pn).then(function(page){return recognizeBest(worker,page).then(function(txt){out.push(txt);if(onprog)onprog(pn,pdf.numPages);});});});
           })(p);}
           return chain.then(function(){return worker.terminate().then(function(){return out.join('\n');});});
         });
