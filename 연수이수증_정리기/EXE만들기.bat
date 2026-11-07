@@ -23,7 +23,7 @@ if errorlevel 1 (
 
 echo [2/3] 실행파일을 생성합니다... (수 분 정도 걸릴 수 있습니다)
 pyinstaller --noconfirm --onefile --windowed ^
-  --name 연수이수증정리기 ^
+  --name 이수ON ^
   --collect-all pdfminer ^
   --collect-all pdfplumber ^
   cert_organizer.py
@@ -36,7 +36,7 @@ if errorlevel 1 (
 
 echo [3/3] 완료!
 echo.
-echo  생성 위치:  "%~dp0dist\연수이수증정리기.exe"
+echo  생성 위치:  "%~dp0dist\이수ON.exe"
 echo  이 exe 파일만 복사해서 어디서든 더블클릭으로 사용할 수 있습니다.
 echo.
 explorer "%~dp0dist"

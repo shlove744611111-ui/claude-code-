@@ -358,7 +358,7 @@ def run_gui():
     from tkinter import filedialog, messagebox, ttk
 
     root = tk.Tk()
-    root.title("연수 이수증 정리기")
+    root.title("이수ON — 연수 이수증 정리")
     root.geometry("860x620")
 
     folder_var = tk.StringVar()
