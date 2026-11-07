@@ -88,13 +88,14 @@
   table{border-collapse:collapse;width:100%;font-size:.89rem;}
   th,td{padding:9px 11px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top;white-space:nowrap;}
   th{background:var(--surface-2);font-weight:700;font-size:.78rem;color:var(--muted);letter-spacing:.02em;position:sticky;top:0;z-index:1;}
-  td.idx{color:var(--muted);font-variant-numeric:tabular-nums;width:38px;}
+  td.idx{color:var(--muted);font-variant-numeric:tabular-nums;width:48px;}
   td.data{font-family:var(--mono);white-space:normal;max-width:240px;}
   th.col{cursor:grab;user-select:none;}
   th.col.dragging{opacity:.45;}
   th.col.dragover{box-shadow:inset 3px 0 0 var(--accent);}
   th.col .lbl{display:inline-block;}
-  th.col .lbl[contenteditable]{outline:2px solid var(--accent);border-radius:4px;padding:0 3px;cursor:text;}
+  th .lbl[contenteditable]{outline:2px solid var(--accent);border-radius:4px;padding:0 3px;cursor:text;}
+  th.idx{cursor:pointer;}
   td[contenteditable]:focus{outline:2px solid var(--accent);outline-offset:-2px;border-radius:4px;background:var(--accent-weak);}
   tr.warn td{background:var(--warn-bg);}
   tr.example td{opacity:.72;}
@@ -378,6 +379,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   var order=COLS.map(function(c){return c.key;});
   var labels={}; COLS.forEach(function(c){labels[c.key]=c.label;});
   var dragKey=null;
+  var idxLabel='순서';
   var rows=[];
 
   var EXAMPLE={example:true,file:'예시_이수증.pdf',
@@ -415,7 +417,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   var tbody=document.getElementById('tbody'),headRow=document.getElementById('headRow'),countEl=document.getElementById('count');
   function escapeHtml(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
   function renderHead(){
-    var h='<th class="idx">#</th>';
+    var h='<th class="idx"><span class="lbl">'+escapeHtml(idxLabel)+'</span></th>';
     order.forEach(function(k){ if(!selected[k])return;
       h+='<th class="col" draggable="true" data-key="'+k+'" title="더블클릭: 이름 수정 · 드래그: 순서 이동"><span class="lbl">'+escapeHtml(labels[k])+'</span></th>';
     });
@@ -448,6 +450,12 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
       th.addEventListener('dragleave',function(){th.classList.remove('dragover');});
       th.addEventListener('drop',function(e){e.preventDefault();th.classList.remove('dragover');moveColumn(dragKey,key);});
     });
+    var idxTh=headRow.querySelector('th.idx'),ispan=idxTh&&idxTh.querySelector('.lbl');
+    if(ispan){
+      idxTh.addEventListener('dblclick',function(){ispan.setAttribute('contenteditable','true');ispan.focus();var rg=document.createRange();rg.selectNodeContents(ispan);var sel=window.getSelection();sel.removeAllRanges();sel.addRange(rg);});
+      ispan.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();ispan.blur();}});
+      ispan.addEventListener('blur',function(){ispan.removeAttribute('contenteditable');var v=ispan.textContent.trim();if(v)idxLabel=v;renderHead();});
+    }
   }
   function render(){
     renderHead();
@@ -507,7 +515,7 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
   // ===== 엑셀 파일 저장 (.xlsx) =====
   function buildRows(){
     var keys=order.filter(function(k){return selected[k];});
-    var head=['번호'].concat(keys.map(function(k){return labels[k];})).concat(['비고']);
+    var head=[idxLabel].concat(keys.map(function(k){return labels[k];})).concat(['비고']);
     var aoa=[head];
     rows.forEach(function(r,i){
       aoa.push([i+1].concat(keys.map(function(k){return getVal(r,k);})).concat([rowNote(r)]));
