@@ -562,13 +562,18 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
     if(/(\d{4})\s*[.\-/년]/.test(t))c+=0.5;
     return c;
   }
+  // 이수증에서 자주 나오는 OCR 오인식 교정 사전 (필요시 여기에 [틀린글자,바른글자] 추가)
+  var OCR_FIX=[['교곡','교육'],['교극','교육'],['교윤','교육'],['교윢','교육'],
+    ['죽사보','주사보'],['죽샤보','주사보'],['즉사보','주사보'],['죽사','주사'],
+    ['교육칭','교육청'],['지윈청','지원청'],['초둥학교','초등학교'],['중핫교','중학교']];
+  function fixOcr(t){for(var i=0;i<OCR_FIX.length;i++){t=t.split(OCR_FIX[i][0]).join(OCR_FIX[i][1]);}return t;}
   function recognizeBest(worker,page){
     // 배율 4, 5 두 번 인식 후 더 잘 잡힌 결과 선택(저해상도=4, 고해상도=5 자동 적응)
     return renderCanvas(page,4).then(function(a){a=deskew(a);return worker.recognize(a).then(function(r4){
       return renderCanvas(page,5).then(function(b){b=deskew(b);return worker.recognize(b).then(function(r5){
         var t4=(r4&&r4.data&&r4.data.text)||'',t5=(r5&&r5.data&&r5.data.text)||'';
         var best=scoreText(t5)>scoreText(t4)?t5:t4;
-        return best.replace(/([가-힣]) (?=[가-힣])/g,'$1');
+        return fixOcr(best.replace(/([가-힣]) (?=[가-힣])/g,'$1'));
       });});
     });});
   }
