@@ -70,8 +70,6 @@
     padding:9px 12px;border:1px solid var(--line);border-radius:9px;background:var(--surface-2);color:var(--fg);}
   .kwrow input[type=text]:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent);}
   .kwrow input[type=text]:disabled{opacity:.45;cursor:not-allowed;}
-  .issinput{width:100%;font-family:var(--font);font-size:.9rem;padding:9px 12px;border:1px solid var(--line);border-radius:9px;background:var(--surface-2);color:var(--fg);}
-  .issinput:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent);}
   .kwhint{font-size:.78rem;color:var(--muted);margin-top:8px;}
   .kwhint code{font-family:var(--mono);background:var(--surface-2);padding:1px 5px;border-radius:5px;}
 
@@ -164,8 +162,7 @@
 
   <div class="panel">
     <div class="ptitle">이수기관 (이수번호로 자동 추정)</div>
-    <input type="text" id="issInput" placeholder="직접 입력(선택) · 예: 경상남도교육청교육연수원" class="issinput">
-    <div class="kwhint"><b>이수번호 앞부분</b>(예: <code>경남교연</code>)으로 이수기관을 자동 추정합니다.</div>
+    <div class="kwhint">이수기관은 <b>이수번호 앞부분</b>(예: <code>경남교연</code>)으로 자동 추정합니다.</div>
   </div>
 
   <div class="panel">
@@ -542,8 +539,6 @@
   function parseKw(){keywords=kwInput.value.split(/[,\n]+/).map(function(s){return s.trim();}).filter(Boolean);}
   kwToggle.addEventListener('change',function(){bundleOn=kwToggle.checked;kwInput.disabled=!bundleOn;kwChip.classList.toggle('on',bundleOn);if(bundleOn)kwInput.focus();render();});
   kwInput.addEventListener('input',function(){parseKw();render();});
-  var issInput=document.getElementById('issInput');
-  issInput.addEventListener('input',function(){issuerDefault=issInput.value.trim();render();});
 
   var drop=document.getElementById('drop'),input=document.getElementById('fileInput'),folderInput=document.getElementById('folderInput');
   input.addEventListener('change',function(){handleFiles(input.files);input.value='';});
