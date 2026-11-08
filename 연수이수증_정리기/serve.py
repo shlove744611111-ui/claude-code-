@@ -2,7 +2,7 @@
 """
 이수ON 로컬 실행기 (창 없음)
 - 이 PC 안에서만 작은 웹서버를 띄우고, 기본 브라우저에 '이수ON' 화면을 엽니다.
-- 인터넷 없이 동작하며(엔진·OCR데이터 내장), PDF 내용은 브라우저 안에서만 처리됩니다.
+- 인터넷 없이 동작하며(라이브러리 내장), PDF 내용은 브라우저 안에서만 처리됩니다.
 - 브라우저 화면을 닫으면(또는 열리지 않으면) 서버가 자동으로 종료됩니다. 별도 창은 없습니다.
 """
 import os
@@ -34,9 +34,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         ".mjs": "text/javascript",
         ".css": "text/css",
         ".json": "application/json",
-        ".wasm": "application/wasm",
-        ".gz": "application/octet-stream",
-        ".traineddata": "application/octet-stream",
         ".png": "image/png",
         ".svg": "image/svg+xml",
         "": "application/octet-stream",

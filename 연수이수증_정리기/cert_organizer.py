@@ -28,16 +28,6 @@ try:
 except ImportError:
     Workbook = None
 
-# OCR (스캔 PDF용) — 선택 구성요소
-try:
-    import pypdfium2 as pdfium
-except ImportError:
-    pdfium = None
-try:
-    import pytesseract
-except ImportError:
-    pytesseract = None
-
 
 # ==================================================================
 # 추출 규칙 (양식이 다르면 이 라벨 목록만 손보면 됩니다)
@@ -245,61 +235,9 @@ def extract_text(path):
     return "\n".join(parts)
 
 
-# ---- OCR (스캔 이미지 PDF) ----
-def _app_dir():
-    if getattr(sys, "frozen", False):
-        return getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
-    return os.path.dirname(os.path.abspath(__file__))
-
-
-def _tessdata_dir():
-    cands = {_app_dir()}
-    try:
-        cands.add(os.path.dirname(os.path.abspath(sys.argv[0])))
-        cands.add(os.path.dirname(sys.executable))
-    except Exception:  # noqa
-        pass
-    for base in cands:
-        d = os.path.join(base, "tessdata")
-        if os.path.exists(os.path.join(d, "kor.traineddata")):
-            return d
-    return ""
-
-
-def _ensure_tesseract():
-    if pytesseract is None:
-        return None
-    import shutil
-    for c in (shutil.which("tesseract"),
-              r"C:\Program Files\Tesseract-OCR\tesseract.exe",
-              r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe"):
-        if c and os.path.exists(c):
-            pytesseract.pytesseract.tesseract_cmd = c
-            return c
-    return None
-
-
-def ocr_pdf(path, lang="kor", scale=3.0):
-    if pdfium is None or pytesseract is None:
-        raise RuntimeError("OCR 구성요소 없음 (pip install pypdfium2 pytesseract pillow)")
-    if not _ensure_tesseract():
-        raise RuntimeError("Tesseract 미설치 — Tesseract-OCR을 설치하세요")
-    td = _tessdata_dir()
-    cfg = ('--tessdata-dir "%s"' % td) if td else ""
-    texts = []
-    pdf = pdfium.PdfDocument(path)
-    try:
-        for i in range(len(pdf)):
-            pil = pdf[i].render(scale=scale).to_pil()
-            texts.append(pytesseract.image_to_string(pil, lang=lang, config=cfg))
-    finally:
-        pdf.close()
-    return "\n".join(texts)
-
-
-def process_pdf(path, keywords=None, bundle_on=False, issuer_default="", ocr_on=True):
+def process_pdf(path, keywords=None, bundle_on=False, issuer_default=""):
     keywords = keywords or []
-    row = {"file": os.path.basename(path), "_failed": False, "ocr": False,
+    row = {"file": os.path.basename(path), "_failed": False,
            "number": "", "course": "", "name": "", "rank": "",
            "org": "", "hours": "", "date": "", "issuer": ""}
     try:
@@ -308,17 +246,10 @@ def process_pdf(path, keywords=None, bundle_on=False, issuer_default="", ocr_on=
         row["_failed"] = True
         row["_err"] = str(e)
         return row
-    if not text.strip() and ocr_on:
-        try:
-            text = ocr_pdf(path)
-            if text.strip():
-                row["ocr"] = True
-        except Exception as e:  # noqa
-            row["_failed"] = True
-            row["_err"] = "OCR: " + str(e)
-            return row
     if not text.strip():
+        # 글자 정보가 없는 스캔(이미지) PDF — 자동 추출 불가, 직접 입력 안내
         row["_failed"] = True
+        row["_scan"] = True
         return row
 
     row["number"] = extract_number_full(text)
@@ -337,6 +268,8 @@ def process_pdf(path, keywords=None, bundle_on=False, issuer_default="", ocr_on=
 
 
 def row_note(row, selected_keys):
+    if row.get("_scan"):
+        return "스캔본(이미지) — 텍스트 없음, 직접 입력하세요"
     if row.get("_failed"):
         return "텍스트 추출 실패 (스캔본일 수 있음)"
     labels = {k: l for k, l, _w, _d in COLUMNS}
@@ -402,7 +335,7 @@ def collect_pdfs(folder):
 
 
 def run(folder, selected_keys=None, keywords=None, bundle_on=False,
-        issuer_default="", ocr_on=True, log=print):
+        issuer_default="", log=print):
     if selected_keys is None:
         selected_keys = [k for k, _l, _w, d in COLUMNS if d]
     pdfs = collect_pdfs(folder)
@@ -411,7 +344,7 @@ def run(folder, selected_keys=None, keywords=None, bundle_on=False,
     rows = []
     for idx, p in enumerate(pdfs, start=1):
         log(f"[{idx}/{len(pdfs)}] {os.path.basename(p)}")
-        rows.append(process_pdf(p, keywords, bundle_on, issuer_default, ocr_on))
+        rows.append(process_pdf(p, keywords, bundle_on, issuer_default))
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     out_path = os.path.join(folder, f"연수이수증_정리_{stamp}.xlsx")
     write_excel(rows, selected_keys, out_path)
@@ -434,7 +367,6 @@ def run_gui():
 
     folder_var = tk.StringVar()
     bundle_var = tk.BooleanVar(value=False)
-    ocr_var = tk.BooleanVar(value=True)
     kw_var = tk.StringVar()
     issuer_var = tk.StringVar()
     col_vars = {k: tk.BooleanVar(value=d) for k, _l, _w, d in COLUMNS}
@@ -469,8 +401,8 @@ def run_gui():
     tk.Label(f3, text="이수기관 기본값").grid(row=1, column=0, sticky="w", pady=(6, 0))
     tk.Entry(f3, textvariable=issuer_var, width=48).grid(row=1, column=1, sticky="we", padx=8, pady=(6, 0))
     tk.Label(f3, text="(번호로 자동 추정, 직접 입력 시 우선)", fg="#888").grid(row=1, column=2, sticky="w", pady=(6, 0))
-    tk.Checkbutton(f3, text="스캔본 OCR 사용 (텍스트 없는 PDF, Tesseract 필요)", variable=ocr_var).grid(
-        row=2, column=0, columnspan=3, sticky="w", pady=(6, 0))
+    tk.Label(f3, text="※ 텍스트 PDF는 자동 정리됩니다. 스캔(이미지) PDF는 표에서 직접 입력하세요.",
+             fg="#888").grid(row=2, column=0, columnspan=3, sticky="w", pady=(6, 0))
     f3.columnconfigure(1, weight=1)
 
     # 4) 실행 + 결과표
@@ -514,7 +446,7 @@ def run_gui():
             tree.delete(i)
         try:
             out_path, rows = run(folder, keys, kws, bundle_var.get(),
-                                 issuer_var.get().strip(), ocr_var.get(),
+                                 issuer_var.get().strip(),
                                  log=lambda m: status.set(m.replace("\n", " ")))
             for i, r in enumerate(rows, start=1):
                 n = row_note(r, keys)
